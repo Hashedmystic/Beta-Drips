@@ -22,4 +22,6 @@ The user is learning development alongside cybersecurity. Work one small, unders
 
 ## Current brick
 
-Inspect the repository and create or update only PRD.md, AGENTS.md and README.md. Do not implement the website, install dependencies, commit, push or deploy. The next brick is discussing the technical stack.
+Set up a minimal runnable React app with JavaScript, Vite and plain CSS in the existing repository, preserving documentation and Git history. Display only the Beta Drips name and tagline. Check Node.js and npm compatibility before editing; do not change system software. Add ignore rules for dependencies, build output and local environment files while allowing .env.example. Update the project documents and verify the production build.
+
+Do not add TypeScript, Tailwind, routing, a component library, products, cart, checkout, authentication, database connections or emails. Backend implementation and hosting remain undecided. Do not commit, push or deploy. Stop after this brick and wait for the user's next instruction.

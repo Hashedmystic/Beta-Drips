@@ -35,9 +35,11 @@ Payments are optional. If added, they must use test mode for this submission.
 
 These are planned acceptance checks, not claims of completed or tested functionality.
 
-## Technical stack — awaiting discussion
+## Technical stack
 
-No framework, language, styling approach or hosting provider has been selected. The next brick is discussing the stack before implementation.
+The frontend uses React with JavaScript, Vite for development and production builds, and plain CSS. No TypeScript, Tailwind, routing or component library is included in the initial setup.
+
+Backend implementation and hosting remain undecided. The required integrations below are unchanged; none is configured in this brick.
 
 Required integrations remain:
 
@@ -62,7 +64,7 @@ These features require later requirements and implementation discussions. They m
 
 ## Current status and assumptions
 
-- This brick creates documentation only; no website or integration is implemented.
+- This brick adds a minimal React app displaying the Beta Drips name and tagline. Shopping features and integrations remain unimplemented.
 - Real catalogue assets have not been supplied for this brick, so initial product content is planned as clearly labelled samples.
 - Checkout must support saving orders and sending confirmations even if optional payments are omitted.
 - Production deployment is a submission requirement, but is not authorized in this brick.
