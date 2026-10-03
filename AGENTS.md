@@ -18,10 +18,10 @@ The user is learning development alongside cybersecurity. Work one small, unders
 - Keep secrets out of source code, logs and Git. When credentials are needed, use appropriate secret configuration and document variable names without secret values.
 - When authentication and protected data operations are introduced, enforce authentication, ownership checks and server-side validation. Client-side controls alone do not protect data.
 - Do not claim an integration works until it has been tested. State what was tested, the result, and any remaining gaps.
-- Keep sample products clearly labelled until real catalogue assets are available.
+- Identify illustrative catalogue content with the user's requested single preview notice; do not imply verified merchandise or stock.
 
 ## Current brick
 
-Set up a minimal runnable React app with JavaScript, Vite and plain CSS in the existing repository, preserving documentation and Git history. Display only the Beta Drips name and tagline. Check Node.js and npm compatibility before editing; do not change system software. Add ignore rules for dependencies, build output and local environment files while allowing .env.example. Update the project documents and verify the production build.
+Prepare the existing project changes for deployment review. Document the user's successful real local Google sign-in, checkout, Supabase saving, Mailgun receipt in Gmail spam and saved-order persistence after logout/login. Record that Mailgun uses a sandbox restricted to authorized recipients. Preserve the distinction between user-reported live results, local automated checks and remaining production/RLS/concurrency verification.
 
-Do not add TypeScript, Tailwind, routing, a component library, products, cart, checkout, authentication, database connections or emails. Backend implementation and hosting remain undecided. Do not commit, push or deploy. Stop after this brick and wait for the user's next instruction.
+Verify .env is ignored and no secrets are tracked or staged without printing secret values. Run the compatible-Node production build and relevant existing tests. Stage project changes and show the staged summary. Suggest a plain imperative commit message without a feat: prefix. Do not commit, push, deploy or change external services. Stop after this brick.

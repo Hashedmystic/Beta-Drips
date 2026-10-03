@@ -6,11 +6,12 @@
 
 ## HNG Lesson 2 submission scope
 
-The initial implementation will support a buyer browsing products and placing an order. It will use clearly labelled sample products until real catalogue assets are available. Sample listings must not imply that real stock or participating brands have been verified.
+The initial implementation will support a buyer browsing products and placing an order. Until real catalogue assets are available, illustrative listings are identified by the single preview catalogue notice. Listings must not imply that real stock or participating brands have been verified.
 
 ### Required features
 
 - Product catalogue and individual product details.
+- Preview catalogue: eight brands with five illustrative products each, category browsing, brand filtering and brand views with descriptions. Product details include relevant sizes, including age sizes for baby wear.
 - Size and quantity selection.
 - Cart and checkout.
 - Google authentication configured through Google Cloud.
@@ -39,7 +40,7 @@ These are planned acceptance checks, not claims of completed or tested functiona
 
 The frontend uses React with JavaScript, Vite for development and production builds, and plain CSS. No TypeScript, Tailwind, routing or component library is included in the initial setup.
 
-Backend implementation and hosting remain undecided. The required integrations below are unchanged; none is configured in this brick.
+Backend implementation uses Supabase and Netlify Functions; Netlify is the hosting target, with deployment pending. The required integrations below are unchanged; the user has configured them and reports successful real local tests.
 
 Required integrations remain:
 
@@ -64,7 +65,9 @@ These features require later requirements and implementation discussions. They m
 
 ## Current status and assumptions
 
-- This brick adds a minimal React app displaying the Beta Drips name and tagline. Shopping features and integrations remain unimplemented.
-- Real catalogue assets have not been supplied for this brick, so initial product content is planned as clearly labelled samples.
+- The frontend includes the Beta Drips name and tagline, 40 illustrative listings across eight brands, licensed photographs, category/brand filters, brand views and product details with size selection. Counts reflect active filters.
+- Bigger, MegaPrisca, 1805 and kutecomfies are user-supplied names. Heritage Atelier and Form Atelier are fictional demo brands in documentation. Loom Atelier and Everyday Studio are working names. Visible brand names and descriptions remain clean.
+- The single catalogue notice is: “Preview catalogue. Products, prices and imagery are illustrative.” Individual sample badges are removed at the user's request. Partnerships, stock, prices, garment ownership and quality inspections have not been verified. Licensed photographs do not establish that pictured garments belong to the named brands.
+- Cart, required size/quantity selection and the checkout interface are implemented. Cart persistence uses validated localStorage; checkout details persist in memory across navigation. Supabase Google sign-in, authenticated Netlify submission, atomic/idempotent persistence, saved history and server Mailgun confirmation code are implemented. The user applied SQL and reports successful real local Google sign-in, checkout, Supabase persistence, Mailgun receipt in Gmail spam and logout/login order persistence. Mailgun uses an authorized-recipient-only sandbox. Cross-account RLS, real concurrent retries and production deployment remain unverified. Order confirmation requires a successful saved-order response; email status is independent.
 - Checkout must support saving orders and sending confirmations even if optional payments are omitted.
 - Production deployment is a submission requirement, but is not authorized in this brick.
