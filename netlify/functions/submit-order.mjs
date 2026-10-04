@@ -16,26 +16,30 @@ export function createHandler({ env = process.env, fetcher = fetch } = {}) {
       user = await response.json();
       if (!user.id) throw new Error();
     } catch { return json({ error: 'Unable to verify your session. Please retry.' }, 503); }
-    let prepared;
+    let prepared, cartRevision;
     try {
       const text = await request.text();
       if (Buffer.byteLength(text) > 32000) return json({ error: 'Order request is too large.' }, 413);
-      prepared = prepareOrder(JSON.parse(text));
+      const body = JSON.parse(text);
+      if (!Number.isSafeInteger(body.cartRevision) || body.cartRevision < 0) throw new Error('A valid cart revision is required.');
+      cartRevision = body.cartRevision;
+      prepared = prepareOrder(body);
     } catch (error) { return json({ error: error instanceof SyntaxError ? 'Invalid order request.' : error.message }, 400); }
     const headers = { apikey: secret, ...(secret.startsWith('sb_secret_') ? {} : { Authorization: 'Bearer ' + secret }), 'Content-Type': 'application/json' };
     const db = async (path, options = {}) => {
       const response = await fetcher(url + '/rest/v1/' + path, { ...options, headers: { ...headers, ...options.headers }, signal: AbortSignal.timeout(10000) });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.message === 'IDEMPOTENCY_CONFLICT' ? 'IDEMPOTENCY_CONFLICT' : 'DATABASE_ERROR');
+        throw new Error(['IDEMPOTENCY_CONFLICT', 'CART_CONFLICT'].includes(data.message) ? data.message : 'DATABASE_ERROR');
       }
       return response.status === 204 ? null : response.json();
     };
     let order;
     try {
-      order = await db('rpc/save_order', { method: 'POST', body: JSON.stringify({ p_user_id: user.id, p_key: prepared.key, p_hash: prepared.hash, p_delivery: prepared.delivery, p_items: prepared.items }) });
+      order = await db('rpc/save_cart_order', { method: 'POST', body: JSON.stringify({ p_user_id: user.id, p_key: prepared.key, p_hash: prepared.hash, p_delivery: prepared.delivery, p_items: prepared.items, p_revision: cartRevision }) });
       if (!order?.id || !Array.isArray(order.order_items) || !Number.isFinite(order.total_naira)) throw new Error('DATABASE_ERROR');
     } catch (error) {
+      if (error.message === 'CART_CONFLICT') return json({ error: 'Your cart changed. Refresh it and review before ordering.', code: 'CART_CONFLICT' }, 409);
       return json({ error: error.message === 'IDEMPOTENCY_CONFLICT' ? 'This retry key belongs to different checkout details. Restore the original details or start a new order.' : 'Order persistence could not be confirmed. Retry with the same checkout details.', }, error.message === 'IDEMPOTENCY_CONFLICT' ? 409 : 503);
     }
     // The order is already durable. Email problems must never turn it into failure.

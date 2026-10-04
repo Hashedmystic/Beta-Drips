@@ -252,3 +252,63 @@ Local environment files stay out of Git, but frontend `VITE_*` values are expose
 User-reported real local tests passed: Google sign-in; checkout; Supabase order saving; Mailgun confirmation received in Gmail spam; saved orders remaining available after logout/login. Mailgun uses a sandbox and sends only to authorized recipients. General-recipient sending and inbox placement are not verified. Production deployment and its OAuth URLs remain pending.
 
 Preparation checks: compatible Node production build and existing tests passed; .env is ignored; project files and Git index were checked for credential patterns and matches to local secret values without printing them. Changes were staged for review only. No commit, push or deployment was performed.
+
+## Task 3 brick 1 — shared customer carts (4 October 2026)
+
+Implemented on `task-3`; no mobile app has been scaffolded. The existing Supabase project, Google authentication, trusted catalogue, order history and Mailgun workflow are reused.
+
+- `supabase/migrations/202610040001_customer_carts.sql` is a **new migration, not applied by the coding agent**. It adds one cart per customer, revisions and durable operation receipts. Explicit grants and RLS allow customers to read only their own cart; anonymous access and direct customer writes are denied. Receipts and mutation RPCs are server-only. The previously applied orders migration is unchanged.
+- `netlify/lib/carts.mjs` validates products, sizes, bounded integer quantities, duplicate lines and operation identity using the existing catalogue. `netlify/functions/cart.mjs` implements authenticated GET/POST. It verifies bearer tokens with Supabase and derives the owner from the verified user, never the request body. Because server credentials bypass RLS, this ownership check is mandatory.
+- `src/lib/cartClient.js` provides guest retry snapshots and account-generation guards. `src/lib/useCart.js` owns guest/local and customer/server cart state, persists retry intentions, hides previous-account carts and ignores late responses. Customer carts refresh on sign-in, focus, visibility and every 15 seconds while visible. Same-origin Web Locks serialize guest synchronization across tabs; authenticated synchronization requires Web Locks (modern browsers over HTTPS or localhost). Failed/uncertain merges retain the guest snapshot and ID, bound to the original account until confirmed. Matching product/size quantities are added once; different sizes remain separate. Over-limit merges fail atomically instead of truncating quantities. Sign out to reduce the preserved guest cart after a definite limit rejection, then sign in again. Local guest storage remains untrusted.
+- `src/App.jsx` integrates the hook and account-aware order confirmations. `src/components/Cart.jsx` disables edits during synchronization and reflects remote quantity changes. `src/components/ProductDetails.jsx` disables adding during sync/errors and describes an update as requested rather than confirmed.
+- `src/lib/submitOrder.js` submits the cart revision and confirms session ownership. `src/components/Checkout.jsx` blocks checkout during unresolved cart synchronization, pauses cart refresh during an unresolved order attempt and offers unchanged-detail retries or an explicit cart reload. Contact details remain in memory only. After page reload, check saved orders in Account if a previous response was lost.
+- `netlify/functions/submit-order.mjs` calls the new `save_cart_order` wrapper. The transaction checks the cart revision and exact contents, saves the order and clears its cart under the same customer lock. An existing order retry is recovered before cart checks/clearing, preserving items added after checkout. Mailgun remains independent of successful persistence.
+- `tests/carts.test.mjs` covers server ownership/authentication, validation, merge retry identity, conflicts, guest snapshot preservation, stale-account guards and SQL declarations. `tests/orders.test.mjs` retains prior coverage and adds revision propagation, cart clearing, persistence failure and preserving later additions on order retry.
+
+Actual verification: production Vite build passed with cached Node **22.23.2**. All **16 assertions-based test cases passed** when running the two test files directly; the existing Node test-runner invocation also passed. `git diff --check` passed. Services and cart/order transactions in tests are **mocked**; SQL security/transaction ordering is inspected as text. No real database SQL, RLS, concurrent transactions, browser OAuth or browser synchronization was exercised in this brick. Existing user-reported Google/order/Mailgun success applies to the earlier implementation, not this new cart integration.
+
+Pending: explicitly authorize and apply the new migration before trying the updated authenticated cart/checkout against Supabase. Both RPCs and cart tables must exist before this code can work live. Then verify two-account RLS, concurrent updates/checkouts, interrupted merge retries, browser state and Mailgun regression through Netlify Dev. No migration, deployment, commit or push was performed. Android Expo work remains a later brick.
+
+Manual verification after migration is separately authorized:
+
+1. As a guest, add two sizes and reload. Sign in with a customer who already has a cart: matching sizes add quantities once; other sizes remain separate. Reload/sign in again: no repeated merge.
+2. Interrupt the merge response, switch accounts, then return to the original customer and retry. The guest snapshot must survive uncertainty, and another account must not receive it.
+3. Open two browsers with the same customer. Change one cart; focus the other or wait 15 seconds. Submit a stale update: expect 409, refreshed contents and an instruction to repeat the intended edit.
+4. Use two customers and anonymous requests. Direct reads of another customer's cart must return no rows; direct cart/receipt writes and RPC calls with public credentials must fail. A spoofed `userId` sent to the endpoint must not change ownership.
+5. Checkout: expect one saved order and one cart clear. Add new items, then resend the old order request/key: the new items must remain. Stale checkout and database failure must preserve the cart and not send email.
+6. Sign out/switch accounts while a response is delayed: previous-customer items must disappear and the late response must not restore them. Confirm saved orders and Mailgun sandbox receipts still work.
+
+### Task 3 session-loss correction
+
+Manual results supplied by the user: guest merging succeeded in Chrome. Firefox, signed into the same customer, later reported an expired session and displayed an empty cart. These observations do not establish that the database cart was deleted.
+
+Diagnosis: `useAuth.js` previously called Supabase `signOut()` with no scope. The installed SDK defaults to **global**, revoking refresh tokens in other browsers. Chrome sign-out can therefore cause Firefox's next refresh to fail; an existing access token may remain valid until expiry. This is a likely explanation, not a verified reconstruction of the user's server events. Automatic token refresh was already enabled, and cart requests already used SDK `getSession()` rather than a token captured when React rendered. However, rejected requests had no bounded refresh retry, and the UI treated missing/unloaded cart data as empty. Loading changes also reset cart state unnecessarily.
+
+Fixes:
+
+- `src/lib/authClient.js` defines browser-local sign-out and authenticated requests. Every send reads the latest SDK session. A 401 allows one refresh/retry with the exact original payload; an already-rotated token is reused. Permanent session loss is distinct from network/429/5xx failures. Account switches stop late retries. No credentials are logged or trusted in place of server verification.
+- `src/lib/useAuth.js` explicitly signs out only the current browser session, tracks unexpected session loss, requests sign-in and prevents focus events from restoring a rejected token to the visible account state. It does not delete server cart data.
+- `src/lib/useCart.js` uses the request helper, preserves last-known items on temporary errors, preserves guest merge snapshots/receipts on authentication failure and hides the account cart on actual session loss. It does not copy an authenticated cart into guest storage or send an empty replacement to handle failed authentication. Routine loading changes no longer reset an authenticated cart. Conflict recovery remains separate from authentication recovery.
+- `src/lib/cartClient.js`, `src/App.jsx`, `src/components/Cart.jsx` and `src/components/Checkout.jsx` distinguish loading, failed loading, session loss and a successfully loaded empty cart. A lost session displays a sign-in prompt; an unavailable cart does not display a misleading zero-item count.
+- `tests/auth-cart.test.mjs` adds 13 regression cases for local sign-out, latest tokens, bounded refresh, exact merge retries, revoked sessions, refresh races, transient errors, account switches and actual server-rendered Cart/Checkout output. `tests/carts.test.mjs` also confirms rejected authentication performs no database request.
+
+Verification: all **29 test cases passed** with cached Node **22.23.2**, including the existing order/cart cases; production build and `git diff --check` passed. Authentication/services are mocked, SQL remains statically inspected, and component rendering tests do not run browser effects. The fixed live Chrome/Firefox flow and real database RLS/concurrency remain unverified. No migration, commit, push, deployment or mobile work was performed.
+
+Manual regression checklist:
+
+1. Sign into the same customer in Chrome and Firefox. Add items and confirm both browsers load the shared cart. Sign out in Chrome, focus Firefox and confirm Firefox remains signed in and its cart still loads, including after token renewal.
+2. Test actual session revocation separately: Firefox must hide account items and request sign-in, without claiming its cart is empty. Sign back into the same account and confirm the server cart returns unchanged.
+3. Go offline or simulate a cart/auth-service 503. Last-known items must remain visible with a retry error; no empty-cart success or guest conversion should appear.
+4. Interrupt a guest merge, then refresh/sign in again. The same merge ID must be retried and quantities added once. Switch accounts during a delayed response: the previous customer's response must be ignored.
+
+### Order history wording
+
+`src/components/Account.jsx` now uses the heading “Order history” and displays “Demo order — no payment taken” in every order entry. This clarifies that a saved record does not establish payment, fulfilment or delivery. Order storage and email-status behaviour are unchanged. The wording change remains with the uncommitted shared-cart work on `task-3`.
+
+Verification: production build passed with Node 22.23.2; the two-line component diff and whitespace checks passed. No new tests were added for this wording-only change. Pending manual check: sign in, open Account and confirm the heading and notice on each entry. Live shared-cart/session/RLS verification remains pending as documented above.
+
+### Shared-cart review before commit
+
+The user reports that the manual shared-cart checks passed and the Order history wording change is complete. No individual checklist results, two-account RLS results, database concurrency measurements or production results were supplied, so those are not independently marked verified. Earlier Chrome success and Firefox session-loss observations remain historical; this latest statement is the user's reported outcome after the fixes. Automated checks are separate: 29 mocked/component-rendering/static-SQL test cases and the Node 22.23.2 production build passed. No migration was applied by the coding agent.
+
+The reviewed changes are limited to shared carts, related authentication/checkout handling, the requested Order history wording, tests and documentation. Secret checks compare local private configuration values against project/index content without printing their values; `.env` is ignored. This brick is authorized for the commit “Add shared customer carts and website synchronization”; no push or deployment is authorized.

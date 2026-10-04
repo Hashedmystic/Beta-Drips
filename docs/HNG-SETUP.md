@@ -108,3 +108,17 @@ Do not publish only dist via drag-and-drop and assume functions exist; use Netli
 8. Check desktop/mobile layouts, expired sessions, missing configuration, reloads and browser history.
 
 Local tests use mocked services and static SQL inspection; they are not evidence that Google OAuth, the migration, RLS or real Mailgun delivery works.
+
+## Task 3 shared cart migration
+
+The website now requires `supabase/migrations/202610040001_customer_carts.sql` in addition to the original orders migration. Do not rerun or edit the original migration. The new migration creates `customer_carts`, `cart_operations`, `change_cart` and `save_cart_order`. It has **not** been applied by this implementation brick. Apply only after explicit authorization and review; then follow the Task 3 manual verification checklist in README.
+
+The new endpoint is `/.netlify/functions/cart` (authenticated GET/POST). Existing server environment variables are reused; no new secrets are needed. Serve through Netlify Dev locally. Customer synchronization uses browser Web Locks, available in supported browsers on localhost/HTTPS. It polls while visible; there is no Realtime publication or WebSocket setup. Pending retry records contain item IDs/sizes/quantities and random IDs, not credentials or checkout contact details.
+
+The order endpoint requires `cartRevision` and uses the new transaction wrapper. Roll out the schema before running the updated server/frontend against it. The user reports the manual shared-cart checks passed. Individual live RLS/concurrency and production results were not provided; mocked tests do not verify PostgreSQL or the configured Supabase instance. Mailgun continues to use the authorized-recipient sandbox.
+
+### Browser sign-out and session recovery
+
+The normal Sign out button now explicitly uses Supabase `scope: 'local'`: it signs out the current browser session, rather than invalidating refresh tokens in every browser/device. Existing sessions already invalidated by earlier global sign-out still require a new Google sign-in. This change does not alter server bearer-token validation or RLS.
+
+Cart requests use the current SDK access token and retry a 401 at most once after refresh (or using an already-rotated token). Temporary network/auth-service errors are not an empty-cart response. Actual session loss hides customer items and asks for sign-in while leaving server cart data and guest retry snapshots intact. Repeat the Chrome/Firefox regression checklist in README; automated mocked tests do not verify this live cross-browser flow.

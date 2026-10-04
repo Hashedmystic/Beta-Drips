@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { cartEmptyMessage } from '../lib/cartClient.js';
+import { useEffect, useState } from 'react';
 import { cartLines, cartTotal } from '../data/cart.js';
 import { formatPrice } from '../data/catalogue.js';
 
 function CartLine({ item, onQuantity, onRemove }) {
   const [draft, setDraft] = useState(String(item.quantity));
   const [error, setError] = useState('');
+  useEffect(() => { setDraft(String(item.quantity)); setError(''); }, [item.quantity]);
   const inputId = 'cart-quantity-' + item.productId + '-' + item.size.replaceAll(' ', '-');
   return (
     <li className="cart-line">
@@ -34,7 +36,7 @@ function CartLine({ item, onQuantity, onRemove }) {
   );
 }
 
-export default function Cart({ cart, setCart }) {
+export default function Cart({ cart, setCart, busy, status }) {
   const [message, setMessage] = useState('');
   const update = (target, quantity) => setCart((items) => items.map((item) => item.productId === target.productId && item.size === target.size ? { ...item, quantity } : item));
   return (
@@ -42,16 +44,16 @@ export default function Cart({ cart, setCart }) {
       <h2 id="cart-title">Cart</h2>
       <p role="status">{message}</p>
       {cart.length ? <>
-        <ul className="cart-list">{cartLines(cart).map((item) => <CartLine key={item.productId + '/' + item.size} item={item}
+        <fieldset disabled={busy}><ul className="cart-list">{cartLines(cart).map((item) => <CartLine key={item.productId + '/' + item.size} item={item}
           onQuantity={(quantity) => update(item, quantity)}
           onRemove={() => {
             setCart((items) => items.filter((entry) => entry.productId !== item.productId || entry.size !== item.size));
             setMessage(item.product.name + ' (' + item.size + ') removed.');
-          }} />)}</ul>
+          }} />)}</ul></fieldset>
         <p className="product-card__price" role="status">Product total: {formatPrice(cartTotal(cart))}</p>
         <p>Delivery fees and payment are not configured.</p>
         <a className="primary-button" href="#checkout">Continue to checkout</a>
-      </> : <><p>Your cart is empty.</p><a className="detail-link" href="#catalogue">Browse the catalogue</a></>}
+      </> : <><p role="status">{cartEmptyMessage(status)}</p>{status === 'session-lost' ? <a href="#account">Sign in</a> : <a className="detail-link" href="#catalogue">Browse the catalogue</a>}</>}
     </section>
   );
 }

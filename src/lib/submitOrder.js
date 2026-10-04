@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js';
 
 // Persist only a digest and random retry key, never checkout personal details.
-export async function submitOrder(cart, delivery, userId) {
+export async function submitOrder(cart, delivery, userId, cartRevision) {
   const fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({ cart, delivery })))), (byte) => byte.toString(16).padStart(2, '0')).join('');
   const storageKey = 'beta-drips-order-attempt-' + userId;
   let attempt;
@@ -13,14 +13,17 @@ export async function submitOrder(cart, delivery, userId) {
     }
   } catch { throw new Error('Browser storage is needed to safely retry orders. Enable local storage before submitting.'); }
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new Error('Your session expired. Sign in again.');
+  if (error || data.session?.user.id !== userId) throw new Error('Your session expired. Sign in again.');
   const response = await fetch('/.netlify/functions/submit-order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.session.access_token },
-    body: JSON.stringify({ idempotencyKey: attempt.key, items: cart, delivery }),
+    body: JSON.stringify({ idempotencyKey: attempt.key, items: cart, delivery, cartRevision }),
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.order?.id) throw new Error(result?.error || 'Order persistence could not be confirmed. Retry unchanged details. Use Netlify Dev when running locally.');
+  if (!response.ok || !result?.order?.id) {
+    const failure = new Error(result?.error || 'Order persistence could not be confirmed. Retry unchanged details.');
+    failure.code = result?.code; throw failure;
+  }
   // Keep the key until the cart is durably cleared by App; recover lost responses safely.
-  return { ...result, attemptStorageKey: storageKey };
+  return { ...result, userId, attemptStorageKey: storageKey };
 }
