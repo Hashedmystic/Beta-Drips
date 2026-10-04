@@ -75,3 +75,7 @@ These features require later requirements and implementation discussions. They m
 ## HNG Task 3 — mobile counterpart, first brick
 
 Android with React Native and Expo is the intended later client. This brick only adds shared authenticated customer carts and website integration using the existing Supabase project. New cart storage uses owner-only reads, server-verified writes, revisions, retry receipts and atomic checkout clearing. Guest carts remain local and merge once on authentication. The coding agent has not applied the new migration. The user reports manual shared-cart checks passed; no individual RLS/concurrency or production results were provided. No mobile scaffold or future marketplace features are included.
+
+## HNG Task 3 — Android foundation, second brick
+
+`mobile/` now contains a JavaScript Expo SDK 57 application with a branded home screen, Android-only configuration, a development-client build profile and the `betadrips` scheme reserved for later authentication. The website remains a separate Vite app with its own dependency installation. There is no mobile authentication, catalogue browsing, cart sync or checkout yet. Expo checks/config introspection and Android JavaScript export passed. Native compilation, APK installation and rendered home-screen launch on a physical Android phone were verified separately. The future authentication callback remains untested. Dependency-audit findings are documented in the mobile README.

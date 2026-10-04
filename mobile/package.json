@@ -1,0 +1,23 @@
+{
+  "name": "beta-drips-mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "expo": "~57.0.26",
+    "expo-dev-client": "~57.0.19",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android --device",
+    "check": "expo install --check",
+    "export:android": "expo export --platform android"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
