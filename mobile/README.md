@@ -1,12 +1,12 @@
 # Beta Drips for Android
 
-This brick creates a JavaScript Expo development app with a simple branded home screen. Authentication, catalogue screens, shared-cart synchronization and checkout are later bricks. No backend configuration or credentials are needed to open this home screen.
+This JavaScript Expo Android app has a branded home screen and Google authentication using the website's existing Supabase project. Catalogue screens, shared-cart synchronization and checkout remain later bricks. The authentication APK was rebuilt and installed on the physical phone. User-verified Google sign-in, saved-account restoration, local sign-out isolation and cancellation/retry results are documented below.
 
 ## Files and concepts
 
-- `App.js`: the home screen, built from native Text/View/ScrollView components. It reuses the website's cream, dark text and green colours. Safe-area handling keeps content away from the phone's system bars; scrolling accommodates larger text settings.
+- `App.js`: the home and account screen, including Google sign-in, account name/email, app-local sign-out and accessible loading/error messages. It reuses the website's colours and safe-area/scroll handling.
 - `index.js`: registers App with Expo as the application entry point.
-- `app.json`: Android-only configuration, display name **Beta Drips**, Android application ID `com.betadrips.app`, and custom URL scheme `betadrips`. The future callback can use `betadrips://auth/callback`; no callback handler or Google/Supabase configuration exists yet.
+- `app.json`: Android-only configuration, display name **Beta Drips**, Android application ID `com.betadrips.app`, and custom URL scheme `betadrips`. Browser and SecureStore plugins support the authentication callback and encrypted storage/backup exclusion rules.
 - `package.json` and `package-lock.json`: mobile dependencies and reproducible npm installation, separate from the website's dependencies. Use Node 22.13+ (verified here with 22.23.2).
 - `eas.json`: a development profile with `developmentClient: true`, internal distribution and Android APK output. It is configuration only; no Expo project has been linked, no account login is needed for local compilation and no cloud build has been started.
 - `.gitignore`: dependencies, local environment files, Expo caches, generated native folders, exported bundles, APK/AAB output and signing material stay out of Git.
@@ -113,3 +113,82 @@ Open **Beta Drips** from the phone's app icon, then select the development serve
 Secret patterns and two local private configuration values were checked against all 95 nonignored project files with no matches; private values were not printed. No user-specific absolute paths or phone serials were found in foundation files. Ignore checks passed for dependencies, generated native projects, Expo caches, bundles, APK/AAB files, local environment files and signing material; none are commit candidates.
 
 The portable helper passed Bash syntax, real Node/tool activation and repeated sourcing without duplicate PATH entries. Configured Java/SDK paths containing spaces and the legacy SDK_ROOT fallback also passed isolated shell checks; those override checks stubbed nvm and are not evidence of another machine's SDK installation. The website production build and existing three automated test files passed with Node 22.23.2 (mocked/component/static-SQL checks, not a live database check). Offline Expo dependency validation reported dependencies up to date but warned that offline validation is unreliable; earlier online Expo validation and the actual native build remain the stronger evidence. No dependency fixes or app features were added. The user authorized the foundation commit; no push or deployment is authorized.
+
+## Google sign-in brick
+
+The app uses the existing Supabase project and its Google provider; signing into the same Google identity uses the same Supabase account as the website. No database migration or backend endpoint change is needed for this brick.
+
+### Public configuration and redirect
+
+An ignored `mobile/.env` was configured from only the website's `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, renamed to Expo's public variable names. No private settings were copied. On another machine, copy `.env.example` to `.env` and fill in the same project's public URL and modern `sb_publishable_…` key. The app rejects secret keys and legacy JWT keys. Restart Metro after changing environment values. All `EXPO_PUBLIC_*` values are bundled into the app and readable by its users; never put server credentials in them.
+
+In the existing Supabase project, open **Authentication → URL Configuration → Redirect URLs** and add exactly:
+
+```text
+betadrips://auth/callback
+```
+
+Keep every existing website redirect and Site URL unchanged. Do not add the app scheme to Google's web OAuth redirects: Google's callback stays the existing Supabase `/auth/v1/callback` URL. Supabase completes the Google flow and redirects back to the app. No Supabase/Google dashboard changes were performed by the coding agent.
+
+### Changed files and security concepts
+
+- `lib/publicConfig.mjs` and `.env.example`: validate public configuration and document placeholders. Local `.env` remains ignored.
+- `lib/supabase.js`: one client, same Supabase SDK version as the website (2.117.2), PKCE, persisted sessions, auto-refresh, native URL detection disabled and the installed SDK's built-in session coordination (its explicit lock option is deprecated). The account UI uses the session's profile for display; future protected operations still require server authentication and ownership checks.
+- `lib/crypto.js`: Expo Crypto supplies secure random values and SHA-256 through the WebCrypto subset required by Supabase. A TextEncoder polyfill supports Hermes. Browser launch refuses a URL whose PKCE challenge method is not S256; there is no plain-PKCE fallback.
+- `lib/secureStorage.mjs`: native SecureStore holds sessions and PKCE data. Large values are encoded into small encrypted chunks; a new manifest is published only after every chunk is saved, preserving the previous readable value if a write fails. Per-key queues prevent refresh writes from removing chunks during a read. Missing/corrupt data is an error, not a silently empty session. Android SecureStore uses the Keystore and its config plugin excludes secure data from device backup. Interrupted writes may leave unreachable encrypted chunks; uninstalling the Android app removes its local data.
+- `lib/authController.mjs`: Google sign-in in a system-browser custom tab, exact callback validation, pending-attempt persistence for cold starts, one code exchange for duplicate Android deliveries, timeout/cancellation/error states and local-scope sign-out. Callback URLs must contain an authorization code, not session tokens. Supabase verifies that code with the locally stored PKCE verifier. Supabase manages its bounded verifier slots; canceled/expired app attempts are ignored. No token, callback URL, code or raw provider error is logged/displayed.
+- `lib/useMobileAuth.js`: wires the controller to React, Linking and AppState; restores stored sessions and starts refresh only while active. Listeners/refresh are cleaned up on unmount. SDK events update the account after refresh or session loss without awaiting more auth calls inside SDK callbacks. A stale restoration result cannot overwrite a newer account event.
+- `App.js`: account name/email, Google button and sign-out; operation controls stay disabled while restoring, opening the browser, exchanging or signing out. Cancellation is distinct from failure. Permanent session loss asks for sign-in; failed sign-out keeps the account visible for retry.
+- `app.json`, `package.json`, `package-lock.json`: SDK-compatible native modules/config plugins and the mobile test script. Existing generated Android files remain ignored. `tests/auth.test.mjs` tests the actual controller/storage code with injected platform dependencies, plus an offline real-Supabase-SDK PKCE check.
+
+Mobile sign-out explicitly calls `signOut({ scope: 'local' })`. This revokes the mobile session's refresh token rather than all sessions for that account, so the website should remain signed in. Browser Google cookies may still exist; signing out of Beta Drips does not sign out of Google itself. A custom app scheme routes a callback but does not authorize an account: the PKCE verifier and Supabase's exchange provide that protection.
+
+### Verification and remaining phone tests
+
+Automated: 18 mobile test cases passed in one Node test file. They cover strict callbacks/public-key validation, large Unicode storage and partial-write recovery, corrupted/missing chunks, browser success/cancel/failure, concurrent callback deduplication, cold-start recovery, expired/failed exchange, foreground refresh, session loss, local sign-out/retry and stale restoration. Browser/native storage/network operations are mocked; the installed Supabase SDK test generates and verifies an S256 challenge using Node crypto without a network request. These tests do not establish that Android Keystore, native crypto, Google or live Supabase work on a phone.
+
+Online Expo dependency validation passed; Expo Doctor passed **21/21 checks** after identical expo-constants copies were deduplicated. Config introspection confirmed `betadrips` and SecureStore's Android backup-rule references. Android JavaScript/Hermes export passed. The website production build and three existing automated test files passed separately. The last installation audit still reported 23 dependency findings (7 moderate, 16 high); no forced audit fixes were made.
+
+The APK installed during the foundation brick predates the new native modules. Rebuild/reinstall the development client before testing; a Metro refresh alone cannot add SecureStore/Crypto/WebBrowser native modules. The authentication APK was subsequently rebuilt/installed and user-tested as documented below. Preserve/reapply the documented one-worker Gradle limits on this laptop. No commit, push, migration, cloud build or deployment occurred.
+
+Manual checklist after adding the redirect and rebuilding:
+
+1. Keep Metro running and USB forwarding on port 8081 active. Open Beta Drips; press Continue with Google and verify the system browser opens.
+2. Finish Google sign-in with the website's account; verify callback return and matching account email. Back out of the browser on another attempt and confirm cancellation allows retry. Decline consent or temporarily disable the network and check a clear error/retry state.
+3. Close/reopen the app and verify the account restores. Background/resume after token expiry and verify refresh, including a network interruption. A permanently revoked session should request sign-in.
+4. Sign into the website too, sign out of the mobile app, then confirm the website remains signed in. Reopen mobile and confirm the old account is hidden. Sign in as another account and verify only that account's profile appears.
+5. Test callback return if Android kills the app while the browser is open, and check enlarged text/loading/error readability. No catalogue, cart or checkout is present.
+
+Official references checked against SDK 57 and the installed Supabase client: [Supabase React Native refresh/storage](https://supabase.com/docs/guides/auth/quickstarts/react-native), [PKCE code exchange](https://supabase.com/docs/guides/auth/sessions/pkce-flow), [native redirects](https://supabase.com/docs/guides/auth/native-mobile-deep-linking), [sign-out scope](https://supabase.com/docs/guides/auth/signout), [Expo browser sessions](https://docs.expo.dev/versions/latest/sdk/webbrowser/), [SecureStore](https://docs.expo.dev/versions/latest/sdk/securestore/), [Crypto](https://docs.expo.dev/versions/latest/sdk/crypto/).
+
+### Authentication APK rebuild and launch
+
+The user reports adding `betadrips://auth/callback` to Supabase's allowed redirects. The agent then verified the connected physical phone's authorized `device` status. Initial resources were approximately 4.7 GiB available RAM and 53 GiB free disk.
+
+Expo prebuild regenerated the ignored Android project for the new native config plugins. Local limits were reapplied: one Gradle worker, parallel builds disabled, 1536 MiB heap and in-process Kotlin. Expo's `run:android --device M2006C3MG --no-bundler` build succeeded in **2m 35s** (326 tasks: 144 executed, 150 cached, 32 up-to-date) and completed installation. Android's package-path check independently confirmed installation. Gradle was stopped after the build.
+
+Metro was restarted with the public mobile configuration and one worker. USB reverse mapping for 8081 was established and listed. App launch returned `Status: ok`; Metro bundled 781 modules in 5.094 seconds. A physical-phone screenshot confirmed the branded screen and enabled Continue with Google button. This verifies the rebuilt app loads with its new native modules, not successful Google sign-in.
+
+The phone rejected an ADB-injected tap with its INJECT_EVENTS security restriction; no phone security settings were changed. The user was asked to tap Continue with Google and complete account selection/consent personally. Browser return, signed-in identity, persistence/refresh and local sign-out isolation remain pending a physical-phone result. No commit or push occurred.
+
+### Saved account after development-server reconnection
+
+After reopening showed an empty Expo development launcher, Metro was verified running on port 8081 and serving the Beta Drips Android development manifest. The phone was initially disconnected from ADB. Once reconnected with authorized `device` status, USB reverse forwarding for 8081 was restored/listed and the installed app was reopened through its localhost development-client URL. Android returned `Status: ok`.
+
+Visual inspection then confirmed the signed-in account screen with profile name/email and Sign out of this app, without another sign-in. No rebuild or app-data clearing was performed. This verifies the saved account returned after reconnecting to Metro; it does not independently establish token-expiry refresh, website-session preservation after mobile sign-out or every Google browser callback scenario. Personal profile values were not copied into repository documentation. Keep Metro running and reapply USB forwarding after reconnecting. No commit or push occurred.
+
+
+### User-verified authentication results before commit
+
+The user explicitly reports these physical-phone results:
+
+- Google sign-in returned to Beta Drips and displayed the account.
+- The saved account was restored after reopening and reconnecting to Metro.
+- Mobile sign-out left the local website signed in after refreshing the website.
+- Canceling Google sign-in and retrying worked.
+
+These are user-verified live results, distinct from automated mocks/offline SDK checks. The agent separately verified native build/install/UI launch and visually confirmed the restored account after Metro reconnection. No personal profile values or credentials are included in documentation. Token-expiry refresh, permanent revocation/network interruption, process termination during browser sign-in, another-account switching and accessibility checks remain unverified on the physical phone; no production result is claimed.
+
+The user authorized the commit “Add Google sign-in to the Android app” on task-3. The reviewed scope is mobile authentication, its native dependencies/configuration, placeholder public environment example, regression tests and related README/PRD documentation. Local environment files, dependencies and generated Android/APK/export files remain ignored. No catalogue, cart or checkout was added; no push is authorized.
+
+Pre-commit review: secret-pattern and exact-private-value checks passed across 103 nonignored project files without printing private values. No machine-specific absolute paths or phone serial were found in mobile source. Local environment/dependency/generated-native/APK/export/signing ignore checks passed; only the placeholder environment example is trackable. All 18 mobile tests, three existing website test files and the Node 22.23.2 website production build passed again. No application code changed during the commit review.

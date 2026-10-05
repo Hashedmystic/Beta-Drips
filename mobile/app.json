@@ -25,7 +25,9 @@
         {
           "launchMode": "launcher"
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-secure-store"
     ]
   }
 }
