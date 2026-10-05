@@ -1,60 +1,35 @@
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Pressable, StyleSheet, Text, ScrollView, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import useMobileAuth from './lib/useMobileAuth';
+import { previewNotice } from './lib/catalogue.mjs';
+import AccountScreen from './components/AccountScreen';
+import ShopScreen from './components/ShopScreen';
+import ProductDetails from './components/ProductDetails';
 
 export default function App() {
+  // Authentication stays mounted while navigating; browsing does not need a session.
   const auth = useMobileAuth();
-  const busy = ['restoring', 'openingBrowser', 'browser', 'exchanging', 'signingOut'].includes(auth.status);
-  const loadingLabel = { restoring: 'Restoring your sign-in…', openingBrowser: 'Opening Google sign-in…', browser: 'Waiting for Google sign-in…', exchanging: 'Completing sign-in…', signingOut: 'Signing out…' }[auth.status];
-  return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.screen}>
-        <StatusBar style="dark" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.brandMark} accessible={false}>
-            <Text style={styles.initials}>BD</Text>
-          </View>
-          <Text style={styles.name} accessibilityRole="header">Beta Drips</Text>
-          <Text style={styles.tagline}>Exceptional fashion. Nigerian brands.</Text>
-          <View style={styles.divider} />
-          <Text style={styles.welcome}>Welcome to Beta Drips</Text>
-          <Text style={styles.description}>A home for Nigerian style.</Text>
-          <View style={styles.account}>
-            {auth.session ? <>
-              <Text style={styles.welcome} accessibilityRole="header">Your account</Text>
-              <Text style={styles.description}>{auth.session.user.user_metadata?.full_name || 'Signed in'}</Text>
-              <Text style={styles.email} selectable>{auth.session.user.email || 'Google account'}</Text>
-              <Pressable accessibilityRole="button" disabled={busy} onPress={auth.signOut} style={[styles.button, busy && styles.disabled]}>
-                <Text style={styles.buttonText}>Sign out of this app</Text>
-              </Pressable>
-            </> : auth.status === 'unconfigured' ? <Text style={styles.description}>Sign-in is not configured for this build.</Text> : <Pressable accessibilityRole="button" disabled={busy} onPress={auth.signIn} style={[styles.button, busy && styles.disabled]}>
-              <Text style={styles.buttonText}>Continue with Google</Text>
-            </Pressable>}
-            {busy && <View style={styles.loading}><ActivityIndicator color="#294c37" /><Text style={styles.description}>{loadingLabel}</Text></View>}
-            {Boolean(auth.message) && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.message}>{auth.message}</Text>}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </SafeAreaProvider>
-  );
+  const [tab, setTab] = useState('Shop');
+  const [product, setProduct] = useState(null);
+  const [filters, setFilters] = useState({ category: 'all', brandId: 'all', query: '' });
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (product && tab === 'Shop') { setProduct(null); return true; }
+      if (tab === 'Account') { setTab('Shop'); return true; }
+      return false;
+    });
+    return () => subscription.remove();
+  }, [product, tab]);
+  return <SafeAreaProvider><SafeAreaView style={styles.screen}>
+    <StatusBar style="dark" />
+    <View style={styles.header}><View style={styles.mark}><Text style={styles.initials}>BD</Text></View><Text style={styles.name}>Beta Drips</Text></View>
+    {tab === 'Shop' && <Text style={styles.notice}>{previewNotice}</Text>}
+    <View style={styles.body}>{tab === 'Account' ? <AccountScreen auth={auth} /> : product ? <ProductDetails key={product.id} product={product} onBack={() => setProduct(null)} /> : <ShopScreen filters={filters} setFilters={setFilters} onOpenProduct={setProduct} />}</View>
+    <View style={styles.navigation}>{['Shop', 'Account'].map(name => <Pressable key={name} accessibilityRole="tab" accessibilityState={{ selected: tab === name }} onPress={() => { setTab(name); if (name === 'Shop') setProduct(null); }} style={[styles.tab, tab === name && styles.activeTab]}><Text style={[styles.tabText, tab === name && styles.activeText]}>{name}</Text></Pressable>)}</View>
+  </SafeAreaView></SafeAreaProvider>;
 }
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#faf8f5' },
-  content: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 28 },
-  brandMark: { width: 88, height: 88, borderRadius: 24, backgroundColor: '#294c37', alignItems: 'center', justifyContent: 'center', marginBottom: 28 },
-  initials: { color: '#faf8f5', fontSize: 30, fontWeight: '700' },
-  name: { color: '#242424', fontSize: 42, fontWeight: '700', textAlign: 'center' },
-  tagline: { color: '#294c37', fontSize: 19, lineHeight: 28, textAlign: 'center', marginTop: 12, maxWidth: 320 },
-  divider: { height: 1, width: 56, backgroundColor: '#ded9d1', marginVertical: 32 },
-  welcome: { color: '#242424', fontSize: 20, fontWeight: '600', textAlign: 'center' },
-  description: { color: '#555', fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 8 },
-  account: { alignSelf: 'stretch', alignItems: 'center', marginTop: 28 },
-  email: { color: '#555', fontSize: 16, textAlign: 'center', marginTop: 8 },
-  button: { backgroundColor: '#294c37', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 16, marginTop: 16, minHeight: 48 },
-  buttonText: { color: '#faf8f5', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  disabled: { opacity: 0.55 },
-  loading: { alignItems: 'center', marginTop: 16 },
-  message: { color: '#555', fontSize: 16, lineHeight: 24, textAlign: 'center', marginTop: 16 },
+  screen: { flex: 1, backgroundColor: '#faf8f5' }, body: { flex: 1 }, header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 12 }, mark: { backgroundColor: '#294c37', borderRadius: 10, padding: 10 }, initials: { color: '#fff', fontWeight: '700' }, name: { color: '#294c37', fontSize: 22, fontWeight: '700' }, notice: { color: '#666e61', fontSize: 11, lineHeight: 16, paddingHorizontal: 20, paddingBottom: 8 }, navigation: { flexDirection: 'row', gap: 12, padding: 12, borderTopWidth: 1, borderTopColor: '#deded5', backgroundColor: '#faf8f5' }, tab: { flex: 1, padding: 15, alignItems: 'center', borderRadius: 12 }, activeTab: { backgroundColor: '#294c37' }, tabText: { color: '#294c37', fontSize: 15, fontWeight: '600' }, activeText: { color: '#fff' },
 });

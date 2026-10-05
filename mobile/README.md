@@ -192,3 +192,36 @@ These are user-verified live results, distinct from automated mocks/offline SDK 
 The user authorized the commit “Add Google sign-in to the Android app” on task-3. The reviewed scope is mobile authentication, its native dependencies/configuration, placeholder public environment example, regression tests and related README/PRD documentation. Local environment files, dependencies and generated Android/APK/export files remain ignored. No catalogue, cart or checkout was added; no push is authorized.
 
 Pre-commit review: secret-pattern and exact-private-value checks passed across 103 nonignored project files without printing private values. No machine-specific absolute paths or phone serial were found in mobile source. Local environment/dependency/generated-native/APK/export/signing ignore checks passed; only the placeholder environment example is trackable. All 18 mobile tests, three existing website test files and the Node 22.23.2 website production build passed again. No application code changed during the commit review.
+
+## Mobile clothing catalogue brick
+
+Shop is now the opening screen and works without signing in. The cream/green two-column grid includes combined brand/category filters, case-insensitive search, result counts, clear controls and a useful empty state. Product details display the original description, naira price, size labels/sizes and licensed image attribution. Sizes are informational; there are no purchase controls. Android Back returns from details or Account to Shop. Filters persist while visiting details or Account.
+
+Files and concepts:
+
+- `App.js`: lightweight Shop/Account navigation; the existing authentication hook stays mounted across screens.
+- `components/AccountScreen.js`: the existing account controls moved out of App, preserving authentication/loading/error handling and local-scope sign-out.
+- `lib/catalogue.mjs`: imports and re-exports the **same** `../src/data/catalogue.js` module used by the website and authenticated server catalogue validation (the relative import from this file is `../../src/data/catalogue.js`). No product data was copied. It adds mobile search and absolute HTTPS image URLs.
+- `metro.config.js`: portable watch folder for the canonical `src/data` directory outside the mobile project. Restart Metro with `--clear` once after this configuration change. No native dependency changes or APK rebuild are needed.
+- `components/ShopScreen.js`: virtualized two-column product grid, search, filters and empty state.
+- `components/ProductDetails.js`: complete product information, Android/back navigation via App and working external image-source/licence links.
+- `components/ProductImage.js`: HTTPS images with loading indicator and a retryable error placeholder; `contain` preserves the uncropped image associations/licence metadata.
+- `tests/catalogue.test.mjs`: shared-object identity, 40 unique IDs, eight brands, image associations, sizes/prices and combined filter/search checks.
+
+The preview notice appears once on Shop/details: “Preview catalogue. Products, prices and imagery are illustrative.” These are not verified stock or partnerships. Catalogue data is public; no server credentials, protected operations, cart or checkout were introduced. Future purchasing must continue to validate IDs/sizes/prices on the server rather than trusting client display data.
+
+Verification performed with Node 22.23.2:
+
+- All 40 absolute HTTPS image URLs at `https://betadrips.netlify.app/images/catalogue/…` returned valid JPEG images; SHA-256 comparisons matched every repository image. This was a real network check, not a mock.
+- Three catalogue tests and the existing 18 authentication tests passed (21 cases). Catalogue tests exercise the real shared data/helper code offline; authentication platform/network dependencies remain mocked apart from the offline SDK check.
+- Android JavaScript/Hermes export passed. Website production build and all three existing website test files passed; website checks do not establish live database behaviour.
+- The authorized physical phone was verified, Metro restarted with one worker, USB forwarding for 8081 restored/listed, and the installed app opened with Android `Status: ok`. Metro bundled 801 modules. Visual inspection confirmed Shop, preview notice, filters/search, 40-piece count, loaded product photographs and both navigation tabs. No APK rebuild, installation or data clearing was needed.
+- The user verified five physical-phone checks: filters/reset, search/empty results, product details, Shop/Account navigation and signed-out browsing. These are user-verified live results. Image-failure retry, licence links, rotation and enlarged text remain pending manual confirmation. Previous user-verified Google authentication results remain documented above; no new sign-in result is inferred from a passing regression test.
+
+Keep the Metro terminal running (`source mobile/android-env.sh`, `cd mobile`, `npx expo start --dev-client --localhost --max-workers 1`). Reapply `adb reverse tcp:8081 tcp:8081` after reconnecting USB. If starting from the development launcher, select the localhost server.
+
+Manual checks: select Bigger (five pieces); combine it with Wedding wear (empty state), then clear filters; search with uppercase/extra spaces and an unmatched term; open a product and compare its image/name/price/description/sizes with the website; use Android Back; visit Account and return to Shop; sign out and confirm browsing still works. Temporarily disconnect networking to check an uncached image's loading/error/retry behaviour. No cart/checkout/purchase controls should appear.
+
+Implementation references: [Expo shared-project Metro configuration](https://docs.expo.dev/guides/monorepos/) and [React Native FlatList](https://reactnative.dev/docs/flatlist). No dependency installation, native rebuild, commit or push was performed for this brick.
+
+Final review: the 10 changed/new files passed private-value/secret-pattern/machine-path checks without printing secret values, and Git whitespace checks passed. Local `.env`, dependencies, generated Android, exports and APK files remain ignored. The final mobile tests and one-worker Android export passed after the account-screen extraction cleanup. Website source, catalogue data, backend, dependency manifests and native configuration are unchanged.
