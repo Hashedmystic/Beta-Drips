@@ -6,7 +6,7 @@ import { createHandler } from '../netlify/functions/submit-order.mjs';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const key = '22222222-2222-4222-8222-222222222222';
-const body = () => ({ idempotencyKey: key, userId: 'attacker-selected-user', delivery: { name: 'Ada Okafor', email: 'ada@example.com', phone: '+2348012345678', address: '12 Example Street, Lagos' }, items: [{ productId: 'bigger-tee', size: 'S', quantity: 2, price: 1 }] });
+const body = () => ({ idempotencyKey: key, cartRevision: 0, userId: 'attacker-selected-user', delivery: { name: 'Ada Okafor', email: 'ada@example.com', phone: '+2348012345678', address: '12 Example Street, Lagos' }, items: [{ productId: 'bigger-tee', size: 'S', quantity: 2, price: 1 }] });
 const env = { SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SECRET_KEY: 'sb_secret_test', MAILGUN_API_KEY: 'test-only-key', MAILGUN_DOMAIN: 'example.com', MAILGUN_FROM: 'Beta Drips <orders@example.com>' };
 const request = (value = body(), token = 'valid-token') => new Request('https://example.com/.netlify/functions/submit-order', { method: 'POST', headers: token ? { Authorization: 'Bearer ' + token } : {}, body: JSON.stringify(value) });
 
@@ -15,13 +15,18 @@ function fakeServices({ mailStatus = 200, mailThrow = false, dbFailure = false, 
   let mailCalls = 0;
   let rpcInput;
   let emailState = 'pending';
+  let cart = { revision: 0, items: body().items.map(({ productId, size, quantity }) => ({ productId, size, quantity })) };
   const fetcher = async (url, options = {}) => {
     if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId }, { status: authStatus });
-    if (url.includes('/rpc/save_order')) {
+    if (url.includes('/rpc/save_cart_order')) {
       rpcInput = JSON.parse(options.body);
       if (dbFailure) return Response.json({ message: 'database unavailable' }, { status: 500 });
       const existing = orders.get(rpcInput.p_user_id + rpcInput.p_key);
       if (existing && existing.request_hash !== rpcInput.p_hash) return Response.json({ message: 'IDEMPOTENCY_CONFLICT' }, { status: 400 });
+      if (!existing) {
+        if (rpcInput.p_revision !== cart.revision) return Response.json({ message: 'CART_CONFLICT' }, { status: 400 });
+        cart = { revision: cart.revision + 1, items: [] };
+      }
       const order = existing || { id: '33333333-3333-4333-8333-333333333333', created_at: '2026-10-02T00:00:00Z', request_hash: rpcInput.p_hash, delivery: rpcInput.p_delivery, order_items: rpcInput.p_items, total_naira: rpcInput.p_items.reduce((sum, item) => sum + item.quantity * item.unit_price_naira, 0) };
       orders.set(rpcInput.p_user_id + rpcInput.p_key, order);
       return Response.json({ ...order, order_emails: { status: emailState } });
@@ -50,7 +55,7 @@ function fakeServices({ mailStatus = 200, mailThrow = false, dbFailure = false, 
     }
     throw new Error('Unexpected service');
   };
-  return { fetcher, orders, get mailCalls() { return mailCalls; }, get rpcInput() { return rpcInput; } };
+  return { fetcher, orders, get cart() { return cart; }, set cart(value) { cart = value; }, get mailCalls() { return mailCalls; }, get rpcInput() { return rpcInput; } };
 }
 
 test('trusted catalogue overrides browser prices and rejects malformed delivery/items', () => {
@@ -123,4 +128,26 @@ test('migration declares owner-only reads and service-only atomic order RPC (sta
   assert.ok(sql.includes('security invoker set search_path = public, pg_temp'));
   assert.ok(sql.includes('revoke all on function public.save_order(uuid, uuid, text, jsonb, jsonb) from public, anon, authenticated'));
   assert.ok(sql.includes('grant execute on function public.save_order(uuid, uuid, text, jsonb, jsonb) to service_role'));
+});
+
+
+test('checkout clears purchased cart once; old order retries preserve later additions', async () => {
+  const services = fakeServices();
+  const handler = createHandler({ env, fetcher: services.fetcher });
+  assert.equal((await handler(request())).status, 200);
+  assert.deepEqual(services.cart, { revision: 1, items: [] });
+  services.cart = { revision: 2, items: [{ productId: 'bigger-tee', size: 'M', quantity: 3 }] };
+  assert.equal((await handler(request())).status, 200);
+  assert.equal(services.cart.revision, 2); assert.equal(services.cart.items[0].quantity, 3);
+  assert.equal(services.orders.size, 1); assert.equal(services.mailCalls, 1);
+});
+
+test('stale checkout and persistence failure preserve cart and never send email', async () => {
+  for (const settings of [{}, { dbFailure: true }]) {
+    const services = fakeServices(settings);
+    const original = structuredClone(services.cart);
+    const response = await createHandler({ env, fetcher: services.fetcher })(request({ ...body(), cartRevision: 9 }));
+    assert.equal(response.status, settings.dbFailure ? 503 : 409);
+    assert.deepEqual(services.cart, original); assert.equal(services.orders.size, 0); assert.equal(services.mailCalls, 0);
+  }
 });

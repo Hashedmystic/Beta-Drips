@@ -1,3 +1,4 @@
+import { cartEmptyMessage } from '../lib/cartClient.js';
 import { submitOrder } from '../lib/submitOrder.js';
 import { validateCheckout } from '../lib/checkout.js';
 import { useRef, useState } from 'react';
@@ -11,13 +12,13 @@ const fields = [
   { key: 'address', label: 'Delivery address', autoComplete: 'street-address', maxLength: 500 },
 ];
 
-export default function Checkout({ cart, details, setDetails, auth, onSaved }) {
+export default function Checkout({ cart, details, setDetails, auth, onSaved, cartRevision, cartBusy, onConflict, onSubmitting, cartStatus }) {
   const [errors, setErrors] = useState({});
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const form = useRef(null);
-  if (!cart.length) return <section><h2>Checkout</h2><p>Your cart is empty. Add a product before checking out.</p><a href="#catalogue">Browse the catalogue</a></section>;
+  if (!cart.length) return <section><h2>Checkout</h2><p>{cartStatus === 'ready' ? 'Your cart is empty. Add a product before checking out.' : cartEmptyMessage(cartStatus)}</p>{cartStatus === 'session-lost' && <a href="#account">Sign in</a>}<a href="#catalogue">Browse the catalogue</a></section>;
   return (
     <section>
       <h2>Checkout</h2>
@@ -33,10 +34,14 @@ export default function Checkout({ cart, details, setDetails, auth, onSaved }) {
             form.current.elements.namedItem(Object.keys(next)[0])?.focus();
             return;
           }
-          if (!auth.session || auth.loading || submittingRef.current) return;
+          if (!auth.session || auth.loading || cartBusy || submittingRef.current) return;
+          onSubmitting();
           submittingRef.current = true; setSubmitting(true); setMessage('Saving your order…');
-          try { onSaved(await submitOrder(cart, details, auth.session.user.id)); }
-          catch (error) { setMessage(error.message); }
+          try { onSaved(await submitOrder(cart, details, auth.session.user.id, cartRevision)); }
+          catch (error) {
+            if (error.code === 'CART_CONFLICT') { onConflict(); setMessage(error.message); }
+            else setMessage(error.message + ' Cart refresh is paused while this checkout is unresolved; retry unchanged details or check Account for the saved order.');
+          }
           finally { submittingRef.current = false; setSubmitting(false); }
         }}>
           <fieldset disabled={submitting}>
@@ -56,8 +61,9 @@ export default function Checkout({ cart, details, setDetails, auth, onSaved }) {
           : !auth.session ? <><p>Sign in before placing your order. Google sign-in reloads the page, so you will need to re-enter contact details; your cart is saved.</p><button type="button" onClick={() => auth.signIn('checkout')}>Sign in with Google</button></>
           : <p>Signed in as {auth.session.user.email}</p>}
           {auth.error && <p role="alert">{auth.error}</p>}
-          <button type="submit" disabled={!auth.session || auth.loading || submitting} className="primary-button">{submitting ? 'Saving order…' : 'Place order'}</button>
+          <button type="submit" disabled={!auth.session || auth.loading || cartBusy || submitting} className="primary-button">{submitting ? 'Saving order…' : 'Place order'}</button>
           <p role="status">{message}</p>
+          {!submitting && <button type="button" onClick={() => { onConflict(); setMessage('Reloading cart. Check Account before starting another order if the previous save was uncertain.'); }}>Reload cart</button>}
         </form>
         <aside className="order-summary" aria-labelledby="summary-title">
           <h3 id="summary-title">Order summary</h3>

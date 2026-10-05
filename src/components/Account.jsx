@@ -2,16 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { formatPrice } from '../data/catalogue.js';
 
-export function emailStatusText(status) {
-  return ({
-    accepted: 'Confirmation email accepted by Mailgun; inbox delivery is not verified.',
-    failed: 'Confirmation email failed. Your order remains saved.',
-    not_configured: 'Confirmation email is not configured. Your order remains saved.',
-    pending: 'Confirmation email is pending.',
-    processing: 'Confirmation email processing; delivery has not been confirmed.',
-    unknown: 'Confirmation email status is uncertain. Your order remains saved.',
-  })[status] || 'Confirmation email status is unavailable.';
-}
+import { emailStatusText } from '../lib/orderStatus.js';
+export { emailStatusText } from '../lib/orderStatus.js';
 
 export default function Account({ auth }) {
   const [orders, setOrders] = useState([]);
@@ -35,11 +27,12 @@ export default function Account({ auth }) {
     : auth.session ? <>
       <p>Signed in as {auth.session.user.email}</p>
       <button type="button" onClick={auth.signOut}>Sign out</button>
-      <h3>Saved orders</h3>
+      <h3>Order history</h3>
       <button type="button" disabled={loading} onClick={() => setRefresh((value) => value + 1)}>Refresh orders</button>
       {loading ? <p role="status">Loading saved orders…</p> : error ? <p role="alert">{error}</p> : !orders.length ? <p>No saved orders yet.</p>
       : <ul className="saved-orders">{orders.map((order) => <li key={order.id}>
         <h4>Order {order.id}</h4><p>{new Date(order.created_at).toLocaleString('en-NG')}</p>
+        <p>Demo order — no payment taken</p>
         <ul>{order.order_items.map((item) => <li key={item.product_id + '/' + item.size}>{item.name} · {item.size} × {item.quantity} — {formatPrice(item.unit_price_naira * item.quantity)}</li>)}</ul>
         <p className="product-card__price">{formatPrice(order.total_naira)}</p>
         <p>{emailStatusText(order.order_emails?.status)}</p>
