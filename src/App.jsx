@@ -66,7 +66,7 @@ export default function App() {
       content.current?.focus();
     }}>Skip to content</a>
     <header className="site-header">
-      <h1><a href="#catalogue">Beta Drips</a></h1>
+      <h1><a className="brand-lockup" href="#catalogue"><img className="brand-mark" src="/branding/beta-drips-mark.png" alt="" width="64" height="64" />Beta Drips</a></h1>
       <p>Exceptional fashion. Nigerian brands.</p>
       <nav className="main-nav" aria-label="Main navigation">
         <a href="#catalogue" aria-current={isCatalogue || brand || product ? 'page' : undefined}>Catalogue</a>

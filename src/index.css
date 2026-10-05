@@ -53,6 +53,20 @@ p {
   text-align: center;
 }
 
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.6rem, 2vw, 1rem);
+}
+
+.brand-mark {
+  width: clamp(2.75rem, 8vw, 4rem);
+  height: auto;
+  flex-shrink: 0;
+  border-radius: 0.7rem;
+}
+
 a {
   color: #294c37;
   text-underline-offset: 0.2em;

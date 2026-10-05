@@ -369,3 +369,56 @@ Official references checked: [Supabase Data REST API](https://supabase.com/docs/
 Pre-commit scope: checkout/history changes and documentation only. The unfinished server email diagnostic/status-write edit from the stopped Mailgun investigation remains uncommitted and is excluded. No emails were resent or email settings changed. The user authorized a separate task-3 commit and normal origin push, with no merge or deployment.
 
 Final checkout/history checks passed again with Node 22.23.2: all four mobile test files (59 cases), all three website test files, website production build and one-worker Android JavaScript/Hermes export. The changed-file secret/path review and ignore/whitespace checks passed without exposing credentials. Automated services remain mocked/in-memory; no new live database/RLS/concurrency checks were performed.
+
+## Mobile production backend configuration brick
+
+Current setup uses the deployed **https://betadrips.netlify.app** website/backend. Earlier localhost instructions and manual results above describe the previous testing phase. This focused brick starts from `main` commit `df2ee50` on branch `mobile-release-config`; logos and standalone APK work are deferred.
+
+The existing setting is `EXPO_PUBLIC_API_BASE_URL`. Both `useMobileCart.js` and `useMobileOrders.js` already pass it through the shared origin validator, with the live HTTPS origin as their default. Only the ignored `mobile/.env` override was changed from localhost to the live origin; Supabase public configuration was preserved. The placeholder `.env.example` clarifies that the deployed backend is the default and documents an explicit local override. No application, authentication, storage, cart, order, dependency or native code changed. SecureStore sessions/guest journals/account-bound pending operation IDs and checkout retries are preserved; app data was not cleared.
+
+From the repository root, use production configuration:
+
+```bash
+source mobile/android-env.sh
+cd mobile
+npx expo start --dev-client --localhost --port 8081 --max-workers 1
+```
+
+For deliberate local API testing, stop Metro and use the explicit process override:
+
+```bash
+source mobile/android-env.sh
+cd mobile
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8888 npx expo start --dev-client --localhost --port 8081 --max-workers 1 --clear
+```
+
+Local mode also needs Netlify dev on 8888 and `adb reverse tcp:8888 tcp:8888`. To return to live mode, stop that process and start Metro normally again. Restart/full reload loads the new environment without clearing app data. Port 8081 forwarding remains necessary for the development client; production API calls use the phone's internet connection over HTTPS. Port 8888 forwarding was absent during this live setup. The existing Netlify dev server was not stopped or changed.
+
+Security lesson: `EXPO_PUBLIC_*` values are visible in the app bundle. The only configured values remain the public API origin, Supabase URL and publishable key; server Supabase and Mailgun secrets remain server-side. HTTP overrides are accepted only for loopback port 8888 in development builds. HTTPS backend selection does not bypass bearer-token validation, ownership checks or existing RLS.
+
+Verification: all four mobile test files (59 existing cases), one-worker Android JavaScript/Hermes export, all three website test files and website production build passed with Node 22.23.2. Existing controller/API/storage/transaction tests use mocks/in-memory services; these checks do not establish live database security or concurrency. No new implementation-mirroring test was added for this configuration/documentation-only change.
+
+Actual observations: the physical phone reported `device`; the existing app was restarted/reconnected without reinstalling, rebuilding or clearing data. Metro was restarted with one worker and the updated environment. Its served Android JavaScript bundle assigns `EXPO_PUBLIC_API_BASE_URL` to the live HTTPS origin, and both cart/checkout clients use that variable. Only 8081 was forwarded. Android launch returned `Status: ok`, the app was in the foreground, and visual inspection confirmed Shop, loaded photos and Shop/Cart/Account tabs. Inspector network observation was unavailable, so no authenticated app request or new manual success is inferred from bundle configuration or launch alone.
+
+**Pending user verification on the live website:**
+
+1. Open Account and verify Google sign-in returns to Beta Drips. Existing saved sessions must remain available after reconnection.
+2. Sign into the same account on **https://betadrips.netlify.app**. Add/edit/remove a size on the phone and verify the website after focus/refresh; change the website cart and refresh the phone. Use the live website, not localhost:8888.
+3. Submit one demo order using an authorized sandbox recipient. Confirm success, both carts clearing and matching order reference/details in both histories. Optional reverse-direction checkout remains a separate result until reported. Do not place another order just to retry an uncertain response; use its saved retry action.
+4. Sign out on the phone. Its account/cart/history should hide, while the live website remains signed in after refresh.
+
+Record these results only when the user confirms them. Failed-submission/retry behaviour, live RLS/security and concurrency remain unverified manually. No commit, push, deployment, migration, logo change or APK build was performed.
+
+Reference: [Expo environment variables](https://docs.expo.dev/guides/environment-variables/), checked for the installed project's existing public-variable workflow.
+
+## Approved logo brick
+
+The approved source `../branding/beta-drips-icon-source.png` now supplies the mobile header mark, opaque Expo icon, transparent Android adaptive foreground, solid green background, themed monochrome silhouette and transparent splash mark. [Branding documentation](../branding/README.md) contains the source hash, all assets, deterministic raster export instructions and [mask/small-size previews](../branding/asset-preview.png). No wordmark was put into tiny icons; the existing Beta Drips name/tagline remain separate and unchanged.
+
+`App.js` changes only the header's decorative `BD` text badge to a 44 dp bundled Image. `app.json` changes adaptive background to `#004634` and adds the Expo splash plugin with the approved transparent mark, matching background and 200 dp image width. `package.json`/lock add SDK-compatible `expo-splash-screen` ~57.0.9; no runtime import or splash-delay behavior was added. Original auth, SecureStore records, guest carts, pending operation IDs, cart synchronization, checkout/history and the live API configuration are preserved.
+
+Website tests/build, 59 existing mobile cases/four files, Android JavaScript export, Expo dependency check and in-memory Android configuration introspection passed. Pixel checks confirmed transparent layers, an opaque app icon, a solid background, matching website/mobile header exports, favicon dimensions and adaptive safe-circle containment. Small icons and circle/squircle previews were inspected. These are automated/asset checks, not a new user-verified authentication/cart/checkout result. The install audit reported 24 findings (8 moderate, 16 high); no forced fixes were performed.
+
+No APK rebuild/install or app-data clearing was performed. Native launcher, themed adaptive icon and splash changes must be included and checked during the planned standalone release build; the current development client cannot establish their appearance. No commit, push or deployment was performed. Earlier manual results and pending live-backend checks remain separate.
+
+Agent-observed logo verification: after reconnecting the installed development client, the approved raster header mark was visibly present beside Beta Drips. App data was preserved. This verifies the JavaScript header only, not the native launcher/splash or pending live authentication/cart/checkout checks. All website brand exports were also present byte-for-byte in the production build.
