@@ -13,7 +13,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.betadrips.app"
+      "package": "com.betadrips.app",
+      "versionCode": 2
     },
     "scheme": "betadrips",
     "platforms": [
@@ -36,7 +37,8 @@
           "imageWidth": 200,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ]
   }
 }

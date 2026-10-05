@@ -50,3 +50,6 @@ build/
 *.keystore
 credentials.json
 coverage/
+
+# Local distributable APKs, checksums and build inspection metadata
+/releases/
