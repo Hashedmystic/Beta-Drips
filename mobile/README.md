@@ -345,7 +345,14 @@ Automated with Node 22.23.2: **59 mobile cases** (18 new order, 21 auth, 17 cart
 
 Actual observations: the authorized physical phone was verified; Metro on 8081 and Netlify dev on 8888 were healthy, both USB forwards were restored/listed and Android launch returned `Status: ok`. A real unauthenticated POST to the local order endpoint returned 401 without creating an order. A Metro reload temporarily left a blank development-client screen. Restarting only the app process and reconnecting the existing client recovered Shop; visual inspection confirmed the catalogue and Shop/Cart/Account tabs. No native runtime error was captured by the filtered log check. This is launch/reconnection evidence, not a successful checkout/history test. No APK rebuild, reinstall or app-data clearing was performed.
 
-**User-verified manual results:** the user reported all three checkout/order-history checks passed: mobile checkout and confirmation with shared-cart clearing; the same mobile-created order/reference/details appearing in website history; and a website-created order/details appearing in mobile history. The user found the confirmation email in spam and confirmed delivery of that message. This does not establish delivery of other messages. Earlier user-verified authentication/catalogue/cart results remain separate. Failure/retry, duplicate prevention under uncertain network conditions, stale-revision handling and account isolation remain pending manual checks; no live database-security/RLS/concurrency test is claimed.
+**User-verified manual results:**
+
+- A phone order appeared in website Order history, and both carts cleared.
+- A website order appeared in phone Order history with correct details.
+- Phone sign-out hid its order history while the website remained signed in.
+- A confirmation email arrived in spam.
+
+Failed-submission/retry behaviour was **not manually verified**. Duplicate prevention under uncertain network conditions, stale-revision handling and cross-account switching remain pending manual checks. No live database security/RLS or concurrency testing is claimed. Email delivery is confirmed only for the message reported by the user. Earlier user-verified authentication/catalogue/cart results remain separate.
 
 Keep **Metro and Netlify dev** running. Continue using **http://localhost:8888** on the laptop, not the older deployed backend. After USB reconnection restore `adb reverse tcp:8081 tcp:8081` and `adb reverse tcp:8888 tcp:8888`; open Beta Drips through the localhost Metro development client. No rebuild is needed because all native modules were already installed.
 
@@ -353,7 +360,7 @@ Manual checklist:
 
 1. Sign into the same account on both platforms. Add a small cart on mobile, open Demo checkout and test required-field errors. Complete valid fields using a Mailgun-authorized email (the existing Mailgun sandbox is restricted to authorized recipients). Review sizes/quantities/total and demo wording; place exactly one order.
 2. Confirm the saved-order success/reference and email status. The shared cart should refresh after confirmed creation. On the website open Account → Order history → Refresh orders and compare that reference/items/total. Email acceptance does not prove inbox delivery; a failed email must still leave the order saved.
-3. Create a separate demo order on the local website. On mobile open Account → Refresh orders; compare details. Reopen/reconnect mobile and verify history/account restoration. The user reported that the three checkout/history checks passed; separate failure/retry and account-isolation checks remain pending.
+3. Create a separate demo order on the local website. On mobile open Account → Refresh orders; compare details. Reopen/reconnect mobile and verify history/account restoration. The user verified order-history synchronization and phone sign-out hiding history while the website stayed signed in; failure/retry and cross-account switching remain pending.
 4. Test a failed/uncertain submission by interrupting connectivity or temporarily stopping Netlify. The cart/attempt must remain available, fields must freeze and Retry this demo order must reuse the original submission. Reopen if needed and retry with the same account after restoring the server; verify only one order. If an order already saved before the interruption, items subsequently added on the website must survive its retry.
 5. Change the cart on the website just before mobile submission to test a stale revision: expect rejection, refreshed cart and review before ordering again. Sign out/switch accounts and verify old history/contact fields disappear and only the current account's orders load. These are functional manual scenarios; they do not replace database/RLS or load/concurrency testing.
 
