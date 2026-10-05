@@ -23,7 +23,8 @@
     "start": "expo start --dev-client",
     "android": "expo run:android --device",
     "check": "expo install --check",
-    "export:android": "expo export --platform android"
+    "export:android": "expo export --platform android",
+    "build:release": "bash build-release.sh"
   },
   "private": true,
   "engines": {
