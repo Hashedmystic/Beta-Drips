@@ -6,7 +6,7 @@ import { supabase, storage } from './supabase';
 import { createAuthController } from './authController.mjs';
 
 export default function useMobileAuth() {
-  const [state, setState] = useState({ session: null, status: supabase ? 'restoring' : 'unconfigured', message: '' });
+  const [state, setState] = useState({ session: null, status: supabase ? 'restoring' : 'unconfigured', message: '', sessionLost: false });
   const controller = useRef(null);
   useEffect(() => {
     const auth = createAuthController({ client: supabase, storage, browser: WebBrowser, linking: Linking, appState: AppState, onChange: setState });
@@ -14,5 +14,5 @@ export default function useMobileAuth() {
     auth.start();
     return () => { auth.dispose(); controller.current = null; };
   }, []);
-  return { ...state, signIn: () => controller.current?.signIn(), signOut: () => controller.current?.signOut() };
+  return { ...state, signIn: () => controller.current?.signIn(), signOut: () => controller.current?.signOut(), markSessionLost: userId => controller.current?.markSessionLost(userId) };
 }

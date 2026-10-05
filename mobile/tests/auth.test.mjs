@@ -27,7 +27,7 @@ function fixture(overrides = {}) {
     startAutoRefresh() { calls.start++; }, stopAutoRefresh() { calls.stop++; }, ...overrides.auth,
   };
   const browser = { openAuthSessionAsync: async (...args) => { calls.browser = args; return { type: 'success', url: `${CALLBACK_URL}?code=valid` }; }, ...overrides.browser };
-  const linking = { getInitialURL: async () => overrides.initialURL || null, addEventListener(_, fn) { linkListener = fn; return { remove() { linkListener = null; } }; } };
+  const linking = { getInitialURL: async () => overrides.initialURL || null, addEventListener(_, fn) { linkListener = fn; return { remove() { linkListener = null; } }; }, ...overrides.linking };
   const appState = { currentState: 'active', addEventListener(_, fn) { appListener = fn; return { remove() { appListener = null; } }; } };
   const updates = [];
   const controller = createAuthController({ client: { auth }, storage, browser, linking, appState, now: () => 1000000, onChange: state => updates.push(state) });
@@ -234,4 +234,30 @@ test('secure session refresh writes and reads are serialized without mixed gener
   const reading = storage.getItem('session');
   await writing;
   assert.equal(await reading, 'new'.repeat(2000));
+});
+
+test('cart-auth session loss hides only its current account and permits a fresh Google sign-in', async () => {
+  const f = fixture({ auth: { getSession: async () => ({ data: { session } }) } });
+  await f.controller.start();
+  f.controller.markSessionLost('another-customer'); assert.equal(f.controller.getState().session, session);
+  f.controller.markSessionLost(session.user.id); assert.equal(f.controller.getState().session, null); assert.equal(f.controller.getState().sessionLost, true);
+  assert.match(f.controller.getState().message, /not been deleted/); assert.equal(f.calls.signOut.length, 0);
+  await f.controller.signIn(); assert.equal(f.controller.getState().session, session); assert.equal(f.controller.getState().sessionLost, false);
+});
+
+test('unexpected SDK sign-out and failed restoration stay distinct from intentional guest browsing', async () => {
+  const f = fixture({ auth: { getSession: async () => ({ data: { session } }) } }); await f.controller.start();
+  f.emit('SIGNED_OUT', null); assert.equal(f.controller.getState().sessionLost, true);
+  const failed = fixture({ auth: { getSession: async () => ({ data: { session: null }, error: new Error('storage') }) } }); await failed.controller.start();
+  assert.equal(failed.controller.getState().sessionLost, true);
+  const normal = fixture({ auth: { getSession: async () => ({ data: { session } }) } }); await normal.controller.start(); await normal.controller.signOut();
+  assert.equal(normal.controller.getState().sessionLost, false);
+});
+
+
+test('a failed native initial-link lookup does not mark a successfully restored session lost', async () => {
+  const f = fixture({ auth: { getSession: async () => ({ data: { session } }) }, linking: { getInitialURL: async () => { throw new Error('native link unavailable'); } } });
+  await f.controller.start();
+  assert.equal(f.controller.getState().session, session);
+  assert.equal(f.controller.getState().sessionLost, false);
 });

@@ -15,7 +15,7 @@ export function parseCallback(raw) {
 
 // Dependencies are injected so the actual controller can be tested without a phone.
 export function createAuthController({ client, storage, browser, linking, appState, now = Date.now, onChange }) {
-  let state = { session: null, status: client ? 'restoring' : 'unconfigured', message: '' };
+  let state = { session: null, status: client ? 'restoring' : 'unconfigured', message: '', sessionLost: false };
   let alive = true;
   let eventVersion = 0;
   let browserActive = false;
@@ -51,7 +51,7 @@ export function createAuthController({ client, storage, browser, linking, appSta
       if (error || !data.session) throw new Error('exchange failed');
       completedCode = code;
       await storage.removeItem(PENDING_KEY);
-      update({ session: data.session, status: 'signedIn', message: '' });
+      update({ session: data.session, status: 'signedIn', message: '', sessionLost: false });
     })();
     try { await exchange; } catch {
       // A failed exchange is not retried automatically: codes are single-use.
@@ -65,7 +65,7 @@ export function createAuthController({ client, storage, browser, linking, appSta
       eventVersion++;
       const lost = event === 'SIGNED_OUT' && state.session && state.status !== 'signingOut';
       const operation = ['openingBrowser', 'browser', 'exchanging', 'signingOut'].includes(state.status);
-      update({ session, status: operation ? state.status : session ? 'signedIn' : 'signedOut', message: lost ? 'Your session expired. Please sign in again.' : state.message });
+      update({ session, status: operation ? state.status : session ? 'signedIn' : 'signedOut', message: lost ? 'Your session expired. Please sign in again.' : state.message, sessionLost: session ? false : lost || state.sessionLost });
       // No awaited Supabase calls inside this SDK callback (avoids its auth lock).
     });
     cleanups.push(() => subscription.unsubscribe());
@@ -84,7 +84,7 @@ export function createAuthController({ client, storage, browser, linking, appSta
       if (alive && eventVersion === version) update({ session: data.session, status: data.session ? 'signedIn' : 'signedOut' });
       const initial = await linking.getInitialURL();
       if (alive && initial) await callback(initial);
-    } catch { failure('Could not restore sign-in. Check your connection and reopen the app.'); }
+    } catch { if (!state.session) update({ sessionLost: true }); failure('Could not restore sign-in. Check your connection and reopen the app.'); }
   }
   async function signIn() {
     if (!client || browserActive || exchange || state.session || state.status === 'restoring') return;
@@ -122,8 +122,13 @@ export function createAuthController({ client, storage, browser, linking, appSta
       const { error } = await client.auth.signOut({ scope: 'local' });
       if (error) throw error;
       await storage.removeItem(PENDING_KEY);
-      update({ session: null, status: 'signedOut', message: 'Signed out of this app.' });
+      update({ session: null, status: 'signedOut', message: 'Signed out of this app.', sessionLost: false });
     } catch { failure('Sign-out failed. Please try again.'); }
   }
-  return { start, signIn, signOut, callback, getState: () => state, dispose() { alive = false; cleanups.forEach(fn => fn()); cleanups = []; } };
+  function markSessionLost(userId) {
+    if (state.session?.user.id !== userId) return;
+    eventVersion++;
+    update({ session: null, status: 'signedOut', sessionLost: true, message: 'Your session expired. Sign in again. Your saved cart has not been deleted.' });
+  }
+  return { start, signIn, signOut, callback, markSessionLost, getState: () => state, dispose() { alive = false; cleanups.forEach(fn => fn()); cleanups = []; } };
 }

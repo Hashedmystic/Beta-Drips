@@ -1,0 +1,28 @@
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { cartLines, cartTotal } from '../../src/data/cartModel.js';
+import { formatPrice } from '../lib/catalogue.mjs';
+import ProductImage from './ProductImage';
+
+export default function CartScreen({ cart, signedIn, onAccount }) {
+  const editable = cart.status === 'ready' && !cart.busy;
+  return <FlatList data={cartLines(cart.items)} keyExtractor={item => JSON.stringify([item.productId, item.size])}
+    contentContainerStyle={styles.content} refreshing={cart.busy} onRefresh={cart.refresh}
+    ListHeaderComponent={<View>
+      <Text style={styles.title} accessibilityRole="header">Your cart</Text>
+      <Text style={styles.description}>{cart.status === 'session-lost' ? 'Sign in again to access your account cart.' : signedIn ? 'Shared with your website cart.' : 'Saved on this phone. Sign in to merge with your account cart.'}</Text>
+      <View style={styles.actions}><Pressable accessibilityRole="button" disabled={cart.busy} onPress={cart.refresh} style={styles.action}><Text style={styles.link}>Refresh cart</Text></Pressable>{!signedIn && <Pressable accessibilityRole="button" onPress={onAccount} style={styles.action}><Text style={styles.link}>Go to Account</Text></Pressable>}</View>
+      {cart.busy && <View style={styles.loading}><ActivityIndicator color="#294c37" /><Text style={styles.description}>Synchronizing…</Text></View>}
+      {Boolean(cart.error) && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.error}>{cart.error}</Text>}
+      {cart.status === 'error' && cart.items.length > 0 && <Text style={styles.description}>Showing the last confirmed cart. Refresh before making another change.</Text>}
+    </View>}
+    ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>{cart.status === 'ready' ? 'Your cart is empty.' : cart.status === 'loading' ? 'Loading your cart…' : cart.status === 'session-lost' ? 'Sign in again to load your saved cart.' : cart.status === 'reserved' ? 'Your guest cart is preserved while its merge is awaiting confirmation.' : 'Your cart could not be loaded. Refresh to retry.'}</Text></View>}
+    ListFooterComponent={cart.items.length > 0 ? <View style={styles.total}><Text style={styles.totalLabel}>Total{cart.status === 'error' ? ' · last confirmed' : ''}</Text><Text style={styles.totalPrice}>{formatPrice(cartTotal(cart.items))}</Text></View> : null}
+    renderItem={({ item }) => <View style={styles.item}>
+      <ProductImage product={item.product} style={styles.image} /><View style={styles.details}><Text style={styles.brand}>{item.product.brand}</Text><Text style={styles.name}>{item.product.name}</Text><Text style={styles.description}>{item.product.sizeLabel}: {item.size}</Text><Text style={styles.price}>{formatPrice(item.product.price * item.quantity)}</Text>
+        <View style={styles.quantity}><Pressable accessibilityRole="button" accessibilityLabel={`Decrease ${item.product.name}, ${item.size} quantity`} disabled={!editable || item.quantity <= 1} onPress={() => cart.quantity(item.productId, item.size, item.quantity - 1)} style={[styles.step, (!editable || item.quantity <= 1) && styles.disabled]}><Text style={styles.link}>−</Text></Pressable><Text accessibilityLabel={`Quantity ${item.quantity}`} style={styles.count}>{item.quantity}</Text><Pressable accessibilityRole="button" accessibilityLabel={`Increase ${item.product.name}, ${item.size} quantity`} disabled={!editable || item.quantity >= 99} onPress={() => cart.quantity(item.productId, item.size, item.quantity + 1)} style={[styles.step, (!editable || item.quantity >= 99) && styles.disabled]}><Text style={styles.link}>+</Text></Pressable></View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.product.name}, ${item.size}`} disabled={!editable} onPress={() => cart.remove(item.productId, item.size)} style={[styles.remove, !editable && styles.disabled]}><Text style={styles.link}>Remove</Text></Pressable>
+      </View></View>} />;
+}
+const styles = StyleSheet.create({
+  content: { padding: 20, paddingBottom: 30 }, title: { color: '#242b25', fontSize: 29, fontWeight: '700' }, description: { color: '#687066', fontSize: 13, lineHeight: 21, marginTop: 6 }, actions: { flexDirection: 'row', gap: 24 }, action: { paddingVertical: 16 }, link: { color: '#294c37', fontWeight: '600' }, loading: { alignItems: 'center', padding: 12 }, error: { color: '#8b3f25', lineHeight: 22, fontSize: 14, marginBottom: 12 }, empty: { paddingVertical: 40 }, emptyText: { color: '#687066', textAlign: 'center', fontSize: 16, lineHeight: 25 }, item: { flexDirection: 'row', gap: 14, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#deded5' }, image: { width: 95, height: 145, borderRadius: 12 }, details: { flex: 1 }, brand: { color: '#687066', fontSize: 11 }, name: { color: '#242b25', fontSize: 16, fontWeight: '600', marginTop: 4 }, price: { color: '#294c37', fontWeight: '700', fontSize: 16, marginTop: 8 }, quantity: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }, step: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d9ddd4', borderRadius: 10 }, count: { color: '#242b25', fontSize: 16 }, remove: { paddingVertical: 12, alignSelf: 'flex-start' }, disabled: { opacity: 0.4 }, total: { paddingVertical: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, totalLabel: { color: '#242b25', fontWeight: '600' }, totalPrice: { color: '#294c37', fontSize: 23, fontWeight: '700' },
+});

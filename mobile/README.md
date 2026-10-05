@@ -225,3 +225,81 @@ Manual checks: select Bigger (five pieces); combine it with Wedding wear (empty 
 Implementation references: [Expo shared-project Metro configuration](https://docs.expo.dev/guides/monorepos/) and [React Native FlatList](https://reactnative.dev/docs/flatlist). No dependency installation, native rebuild, commit or push was performed for this brick.
 
 Final review: the 10 changed/new files passed private-value/secret-pattern/machine-path checks without printing secret values, and Git whitespace checks passed. Local `.env`, dependencies, generated Android, exports and APK files remain ignored. The final mobile tests and one-worker Android export passed after the account-screen extraction cleanup. Website source, catalogue data, backend, dependency manifests and native configuration are unchanged.
+
+## Mobile shared-cart brick
+
+Product details now require a size before Add to cart. Cart shows the original image/name/size, quantity controls (1–99), removal and naira line/overall totals. Guest browsing and the existing Shop/Account screens remain available; no mobile checkout was added.
+
+### Shared contract and security
+
+The app uses the existing `GET/POST /.netlify/functions/cart` endpoint with the website's Supabase project. Requests contain `operationId`, `mode`, `revision` and validated `items`; ownership comes from the endpoint's verified bearer token, never a mobile-supplied customer ID. The existing server/catalogue validation, revision checks, per-user operation receipts, grants/RLS and SQL migration are unchanged. The user reports that the customer-cart migration is already applied; it was not rerun.
+
+A signed-in replacement uses the last confirmed revision. A conflict refreshes the newer server cart and asks the user to repeat the change, rather than overwriting it. Every request reads the current Supabase session through the same browser-free authenticated-request helper used by the website. A 401 allows one token refresh/retry with the identical operation payload; network/server failures are not treated as session expiry.
+
+The existing encrypted/chunked SecureStore adapter persists one atomic cart journal: guest items, a guest claim and pending operations per customer. A claim freezes the guest snapshot and its initiating account before the network send. A lost response or failed local finalization retries the exact same operation ID/body; the server receipt prevents duplicate merging. Guest data is cleared only after confirmed success and a durable local journal update. A pending claim cannot be moved to another account or edited as a fresh guest cart; sign back into the initiating account to resolve it. A known rejected over-limit merge preserves the guest cart, stops periodic merge attempts and allows adjustment after sign-out or an explicit refresh after reducing the account cart.
+
+Account changes immediately hide old items; generation checks ignore late responses. Unexpected session loss shows a sign-in request and hides account items without deleting the server cart or converting them to guest data. Intentional mobile sign-out still uses local scope. Corrupt/unavailable storage and malformed responses are errors, not successful empty carts. On a network failure, the current account's last confirmed items remain visible and editing pauses until refresh succeeds. After a cold reopen, a signed-in cart still requires a successful server load; an unavailable server produces an error instead of a fabricated empty cart.
+
+### Files changed
+
+- `../src/data/cartModel.js`: extracted the existing pure cart validation, lines and total calculations; `../src/data/cart.js` re-exports them and retains browser-only `readCart`. Website behaviour is preserved.
+- `lib/cartApi.mjs`: strict response/API-origin validation and shared authenticated requests, with a 15-second fetch deadline.
+- `lib/cartController.mjs`: serialized edits/requests, encrypted journal, exactly-once merge retries, revision conflicts and account isolation. The durable operation and server receipt work together; a UUID alone does not authorize a write.
+- `lib/cartRefresh.mjs`: foreground refresh and a 15-second interval while active; backgrounding/disposal clears the interval. Native AppState and timers are injected for tests.
+- `lib/useMobileCart.js`: connects the controller to Supabase, SecureStore and React/native lifecycle; render-time ownership checks hide old-account items before effects run.
+- `lib/authController.mjs` / `lib/useMobileAuth.js`: expose explicit session-loss state and a current-account-only loss handler, preserving Google PKCE/session restoration/local sign-out.
+- `App.js`, `components/CartScreen.js`, `components/ProductDetails.js`: Cart navigation, size selection/Add to cart, quantities/removal/totals, manual refresh/pull-to-refresh and distinct loading/error states.
+- `metro.config.js`: also watches the shared pure auth helper under `src/lib`; mobile imports no browser storage, window, document or Web Locks APIs.
+- `.env.example`: public API base origin placeholder; ignored local `.env` was set to the local Task 3 server. No server/Mailgun secret was copied.
+- `tests/cart.test.mjs` and `tests/auth.test.mjs`: cart/session-loss regression coverage. No new dependencies or native configuration changes were needed.
+
+### Local laptop/phone test setup
+
+The production website still has the earlier backend. Test this brick against the Task 3 checkout on the laptop, not the deployed website. The catalogue photographs continue to use production HTTPS image URLs.
+
+The ignored local mobile environment now includes:
+
+```dotenv
+EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8888
+```
+
+Keep the existing Supabase public URL/publishable key unchanged. `EXPO_PUBLIC_*` values are readable in the app bundle. HTTP is accepted only for `localhost`/`127.0.0.1`, port 8888, in a development build. Production configuration remains available as `EXPO_PUBLIC_API_BASE_URL=https://betadrips.netlify.app`; release code rejects HTTP. Do not switch to the production endpoint until its shared-cart backend is deployed through a separately authorized brick.
+
+Keep two servers running:
+
+1. Netlify dev from the repository root on port 8888 (`npx netlify-cli dev --port 8888` when starting afresh). Its server secrets stay in the ignored root environment, on the laptop. Use **http://localhost:8888** in the laptop browser for the website and Google sign-in.
+2. Metro from `mobile/`, with the portable environment helper sourced and one worker: `npx expo start --dev-client --localhost --max-workers 1`. After the new watch folder/configuration, restart once with `--clear` and fully reload the installed app. No APK rebuild is needed for this brick.
+
+Restore USB forwards after reconnecting:
+
+```bash
+source mobile/android-env.sh
+adb devices -l
+adb reverse tcp:8081 tcp:8081
+adb reverse tcp:8888 tcp:8888
+adb reverse --list
+```
+
+Open the installed Beta Drips development app using its localhost Metro server. USB forwards the phone's loopback ports to the laptop; do not replace the local origin with a public HTTP address.
+
+### Verification and remaining manual checks
+
+Automated checks passed with Node 22.23.2: **41 mobile cases** (17 cart, 21 authentication, three catalogue), Android JavaScript/Hermes export, the website production build and three existing website test files. Cart tests use injected in-memory storage/server/receipt/revision models and mocked native lifecycle/timers; they are not live PostgreSQL/RLS or phone-storage checks. API tests execute the real shared token-refresh helper with mocked responses and preserve the POST payload during auth retries. Existing website ownership, server validation, receipt/conflict and checkout-clearing regression tests passed; their database services remain mocked/static as previously documented.
+
+Actual local observations: Netlify dev was confirmed running from this repository on port 8888; GET without a bearer token returned 401, and an invalid bearer token returned 401 through the real endpoint/Supabase auth path. These read-only rejection checks do not establish authenticated cart writes or RLS ownership. The authorized physical phone was verified; both USB forwards were restored/listed. Android app launch returned `Status: ok`, Metro bundled the new code, and visual inspection confirmed the existing Shop/catalogue plus the new Cart tab. The installed APK was reused without rebuilding, reinstalling or clearing data.
+
+**User-verified physical-phone/local-website results:** synchronization in both directions, guest-cart persistence after reopening, guest-cart merging after sign-in and no duplication after refreshing. These are the user's reported live functional results, separate from automated mocks and the agent's launch/visual observations. No live database security/RLS or concurrency test was performed in this brick. Foreground/periodic refresh independently of manual refresh, offline/lost-response recovery, account switching and actual session loss remain pending manual verification.
+
+Manual checklist:
+
+1. Sign into the same account on the phone and **localhost:8888**. On mobile, open a product, select a size and add it. Verify image/size/quantity/total in Cart and that the same line appears on the laptop after focus/refresh.
+2. On the laptop change its quantity, add another size or remove a line. Refresh Cart on mobile, or wait about 15 seconds while active. Background/resume mobile and verify foreground refresh too.
+3. Sign out of mobile only: old account items must disappear; the website should remain signed in. Add guest lines with distinct sizes, reopen/reconnect the app and confirm persistence. Sign back in: quantities should combine once. Refresh/reopen again to confirm no duplicate merge.
+4. Interrupt connectivity/temporarily stop Netlify after loading a signed-in cart: an error should retain the last confirmed cart, not show a successful empty cart. Restore the server and refresh. For a failed guest merge, preserve it and retry with the same account; another account must not receive it.
+5. Change the website cart and make a stale mobile change before refresh: expect a conflict, the newer cart and a request to repeat the edit. Test another account and actual revoked-session handling separately. No checkout is present in mobile.
+
+Official references: [React Native AppState](https://reactnative.dev/docs/appstate) and [Expo public environment variables](https://docs.expo.dev/guides/environment-variables/). No migration, deployment, main merge, commit or push was performed.
+
+Final review: 17 changed/new files passed private-value, secret-pattern, portable-path and whitespace checks without printing secret values. Local environment/dependency/native/export/APK files remain ignored; no backend/migration/native/dependency files were changed. Additional regressions cover retaining a same-account snapshot after failed sign-out, ignoring late reads, preserving account-bound pending merges on session loss, identical POST auth retries and keeping a valid restored session when initial-link lookup fails. These are automated results, not additional manual successes.
+
+Pre-commit checks passed again with Node 22.23.2: 41 mobile cases, Android JavaScript/Hermes export with one worker, website tests and website production build. The 17-file secret/path/scope review and ignore checks passed without printing credentials. Only this cart brick, shared helper extraction, its regressions and documentation are included. The user authorized “Add synchronized carts to the Android app” on task-3 and a normal push to the existing origin; no merge, migration, deployment or next feature is authorized. User-reported functional results do not establish live database security/RLS or concurrency testing.
