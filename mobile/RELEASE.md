@@ -24,7 +24,7 @@ Verify the APK using SDK `apksigner verify --print-certs` and `aapt2 dump badgin
 
 ## Existing development installation
 
-The installed development app uses a debug certificate. This release uses a private release certificate, so Android will reject an in-place update. **Do not uninstall or clear data automatically.** Obtain explicit approval before replacing it: uninstalling loses local SecureStore sessions, guest carts and pending local operations. Server-owned carts/orders/accounts remain on Supabase. Finish or preserve important guest work before removal. Future releases signed with the same new key can update in place.
+The previously installed development app used a debug certificate. This release uses a private release certificate, so Android will reject an in-place update. **Do not uninstall or clear data automatically.** Obtain explicit approval before replacing it: uninstalling loses local SecureStore sessions, guest carts and pending local operations. Server-owned carts/orders/accounts remain on Supabase. Finish or preserve important guest work before removal. Future releases signed with the same new key can update in place.
 
 After approved installation, stop Metro and disconnect USB. Manually verify icon launch, loaded images, Google sign-in, saved session after reopening, both directions of live website/cart synchronization, demo checkout/cart clearing/shared history and phone-only sign-out. Do not publish the APK until the user confirms these checks.
 
@@ -36,6 +36,6 @@ After phone verification, create a versioned GitHub Release in `Hashedmystic/Bet
 
 Build completed successfully in 19m 28s with one worker. APK size: 38,372,090 bytes. SHA-256: `e579b146801272f9023ae03ea7c4616fea7872d59f06709edc75a279d538c9d2`.
 
-Release certificate SHA-256: `045628016610b9f484adbd30f55b1247b234731d0dc0ca0925fabe7e9eae733a` (RSA-4096). It is not the installed debug certificate. Inspection verified API 24+, both ARM architectures, embedded Hermes JavaScript/live HTTPS API, callback scheme, no development launcher activity/debuggable flag and no known private values. These are artifact checks; installation, no-USB physical-phone tests and GitHub publication are pending.
+Release certificate SHA-256: `045628016610b9f484adbd30f55b1247b234731d0dc0ca0925fabe7e9eae733a` (RSA-4096). It is not the installed debug certificate. Inspection verified API 24+, both ARM architectures, embedded Hermes JavaScript/live HTTPS API, callback scheme, no development launcher activity/debuggable flag and no known private values. These are artifact checks. The user subsequently confirmed all standalone physical-phone checks passed with USB disconnected and Metro stopped: branding/images, Google sign-in, session persistence, live website cart synchronization, demo checkout/shared history and phone-only sign-out. Installation method after the initial blocked ADB attempt was not agent-observed. Live RLS/security/concurrency testing and newly manual retry/failure checks are not claimed. Publication as v1.0.0 is authorized after recording these results and pushing the documentation; anonymous accessibility is verified after publication.
 
 Actual Gradle negative check: an offline `app:assembleRelease --dry-run` without the four private signing variables failed with the expected signing-credentials guard. No APK was produced by that check.
