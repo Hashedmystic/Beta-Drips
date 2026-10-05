@@ -8,6 +8,7 @@ import { validPublicConfig } from './publicConfig.mjs';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+export const publicSupabaseConfig = { url, key };
 export const storage = createSecureStorage(SecureStore, Crypto.randomUUID);
 export const supabase = validPublicConfig(url, key) ? createClient(url, key, {
   auth: {

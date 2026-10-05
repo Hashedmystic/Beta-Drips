@@ -25,9 +25,10 @@ function journalCheck(value) {
 
 // One serialized controller owns the local journal and network sends. Identity
 // changes hide data synchronously; old tasks may finish but cannot publish it.
-export function createCartController({ storage, request, uuid, onChange }) {
-  let journal, state = { owner: null, items: [], revision: 0, status: 'loading', busy: false, error: '' };
+export function createCartController({ storage, request, uuid, onChange, initialHold = false }) {
+  let journal, state = { owner: null, items: [], revision: 0, status: 'loading', busy: false, error: '', checkoutPending: initialHold };
   let identity = { userId: null, loading: true, sessionLost: false };
+  let checkoutHeld = initialHold;
   let epoch = 0, alive = true, queue = Promise.resolve();
   const emit = patch => { state = { ...state, ...patch }; if (alive) onChange(state); };
   const active = generation => alive && epoch === generation;
@@ -47,7 +48,7 @@ export function createCartController({ storage, request, uuid, onChange }) {
     if (active(generation)) emit({ owner: identity.userId, ...checkedCart(cart), status: 'ready', error });
   }
   async function synchronize(generation, manual = false) {
-    if (!active(generation) || identity.loading || identity.sessionLost) return false;
+    if (!active(generation) || identity.loading || identity.sessionLost || checkoutHeld) return false;
     const userId = identity.userId;
     emit({ busy: true });
     try {
@@ -114,7 +115,7 @@ export function createCartController({ storage, request, uuid, onChange }) {
   function mutate(updater) {
     const generation = epoch;
     return enqueue(async () => {
-      if (!active(generation) || identity.loading || identity.sessionLost || state.status !== 'ready') return false;
+      if (!active(generation) || identity.loading || identity.sessionLost || checkoutHeld || state.status !== 'ready') return false;
       emit({ busy: true });
       try {
         await load();
@@ -150,6 +151,16 @@ export function createCartController({ storage, request, uuid, onChange }) {
     });
   }
   return { setIdentity, add,
+    holdCheckout(value) { checkoutHeld = value; emit({ checkoutPending: value }); },
+    confirmCheckout(expectedOwner = identity.userId) {
+      if (!alive || identity.userId !== expectedOwner) return Promise.resolve(false);
+      const generation = epoch;
+      checkoutHeld = false;
+      emit({ checkoutPending: false, items: [], revision: 0, status: 'loading' });
+      // The server transaction already cleared its checkout snapshot. Only read
+      // the current cart; never send an empty replacement that could erase new items.
+      return enqueue(() => synchronize(generation));
+    },
     quantity: (productId, size, quantity) => mutate(items => items.map(item => item.productId === productId && item.size === size ? { ...item, quantity } : item)),
     remove: (productId, size) => mutate(items => items.filter(item => item.productId !== productId || item.size !== size)),
     refresh: (manual = true) => { if (state.busy) return Promise.resolve(false); const generation = epoch; return enqueue(() => synchronize(generation, manual)); },

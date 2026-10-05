@@ -1,6 +1,7 @@
+import OrderHistory from './OrderHistory';
 import { ActivityIndicator, Pressable, StyleSheet, Text, ScrollView, View } from 'react-native';
 
-export default function AccountScreen({ auth }) {
+export default function AccountScreen({ auth, orders }) {
   const busy = ['restoring', 'openingBrowser', 'browser', 'exchanging', 'signingOut'].includes(auth.status);
   const loadingLabel = { restoring: 'Restoring your sign-in…', openingBrowser: 'Opening Google sign-in…', browser: 'Waiting for Google sign-in…', exchanging: 'Completing sign-in…', signingOut: 'Signing out…' }[auth.status];
   return (
@@ -21,6 +22,7 @@ export default function AccountScreen({ auth }) {
             {busy && <View style={styles.loading}><ActivityIndicator color="#294c37" /><Text style={styles.description}>{loadingLabel}</Text></View>}
             {Boolean(auth.message) && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={styles.message}>{auth.message}</Text>}
           </View>
+          {auth.session && <OrderHistory key={auth.session.user.id} orders={orders} />}
         </ScrollView>
 
   );

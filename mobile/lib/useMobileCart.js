@@ -9,7 +9,7 @@ import { startCartRefresh } from './cartRefresh.mjs';
 export default function useMobileCart(auth) {
   const authRef = useRef(auth); authRef.current = auth;
   const controller = useRef(null);
-  const [state, setState] = useState({ owner: null, items: [], revision: 0, status: 'loading', busy: false, error: '' });
+  const [state, setState] = useState({ owner: null, items: [], revision: 0, status: 'loading', busy: false, error: '', checkoutPending: true });
   const userId = auth.session?.user.id || null;
   const loading = ['restoring', 'openingBrowser', 'browser', 'exchanging', 'signingOut'].includes(auth.status);
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function useMobileCart(auth) {
     } catch {
       request = async () => { throw new Error('Invalid API configuration.'); };
     }
-    const cart = createCartController({ storage, request, uuid: Crypto.randomUUID, onChange: setState });
+    const cart = createCartController({ storage, request, uuid: Crypto.randomUUID, onChange: setState, initialHold: true });
     controller.current = cart;
     const stopRefresh = startCartRefresh({ appState: AppState, refresh: cart.refresh, isSignedIn: () => Boolean(authRef.current.session) });
     return () => { stopRefresh(); cart.dispose(); controller.current = null; };
@@ -32,5 +32,7 @@ export default function useMobileCart(auth) {
     busy: state.busy || hidden, error: auth.sessionLost ? 'Sign in again to view your saved cart. Its server data has not been deleted.' : hidden ? '' : state.error,
     add: (id, size) => controller.current?.add(id, size),
     quantity: (id, size, quantity) => controller.current?.quantity(id, size, quantity),
-    remove: (id, size) => controller.current?.remove(id, size), refresh: () => controller.current?.refresh() };
+    getState: () => controller.current?.getState(),
+    holdCheckout: value => controller.current?.holdCheckout(value), confirmCheckout: expectedOwner => controller.current?.confirmCheckout(expectedOwner),
+    remove: (id, size) => controller.current?.remove(id, size), refresh: (manual = true) => controller.current?.refresh(manual) };
 }

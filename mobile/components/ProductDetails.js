@@ -24,8 +24,9 @@ export default function ProductDetails({ product, onBack, cart }) {
     <Text accessibilityRole="header" style={styles.sizeHeading}>Available sizes · {product.sizeLabel}</Text>
     <View style={styles.sizes}>{product.sizes.map(size => <Pressable key={size} accessibilityRole="button" accessibilityLabel={`Select size ${size}`} accessibilityState={{ selected: size === selectedSize }} onPress={() => { setSize(size); setAdded(false); }} style={[styles.size, size === selectedSize && styles.selectedSize]}><Text style={[styles.sizeText, size === selectedSize && styles.selectedSizeText]}>{size}</Text></Pressable>)}</View>
     <Text style={styles.description}>{selectedSize ? `Selected: ${selectedSize}` : 'Choose a size before adding to your cart.'}</Text>
-    <Pressable accessibilityRole="button" disabled={!selectedSize || adding || cart.busy || cart.status !== 'ready'} onPress={add} style={[styles.add, (!selectedSize || adding || cart.busy || cart.status !== 'ready') && styles.disabled]}><Text style={styles.addText}>{adding ? 'Adding…' : 'Add to cart'}</Text></Pressable>
+    <Pressable accessibilityRole="button" disabled={!selectedSize || adding || cart.busy || cart.checkoutPending || cart.status !== 'ready'} onPress={add} style={[styles.add, (!selectedSize || adding || cart.busy || cart.checkoutPending || cart.status !== 'ready') && styles.disabled]}><Text style={styles.addText}>{adding ? 'Adding…' : 'Add to cart'}</Text></Pressable>
     {added && <Text accessibilityLiveRegion="polite" style={styles.description}>Added to cart.</Text>}
+    {cart.checkoutPending && <Text style={styles.description}>Checkout is awaiting confirmation. Open Cart to recover it.</Text>}
     {cart.status === 'loading' && <Text style={styles.description}>Loading your cart…</Text>}
     {Boolean(cart.error) && <Text accessibilityRole="alert" style={styles.description}>{cart.error} Open Cart to refresh.</Text>}
     <View style={styles.credit}><Text style={styles.creditText}>Image: {product.photo.photographer}</Text>
