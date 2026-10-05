@@ -410,3 +410,15 @@ Actual observations: the physical phone reported `device`; the existing app was 
 Record these results only when the user confirms them. Failed-submission/retry behaviour, live RLS/security and concurrency remain unverified manually. No commit, push, deployment, migration, logo change or APK build was performed.
 
 Reference: [Expo environment variables](https://docs.expo.dev/guides/environment-variables/), checked for the installed project's existing public-variable workflow.
+
+## Approved logo brick
+
+The approved source `../branding/beta-drips-icon-source.png` now supplies the mobile header mark, opaque Expo icon, transparent Android adaptive foreground, solid green background, themed monochrome silhouette and transparent splash mark. [Branding documentation](../branding/README.md) contains the source hash, all assets, deterministic raster export instructions and [mask/small-size previews](../branding/asset-preview.png). No wordmark was put into tiny icons; the existing Beta Drips name/tagline remain separate and unchanged.
+
+`App.js` changes only the header's decorative `BD` text badge to a 44 dp bundled Image. `app.json` changes adaptive background to `#004634` and adds the Expo splash plugin with the approved transparent mark, matching background and 200 dp image width. `package.json`/lock add SDK-compatible `expo-splash-screen` ~57.0.9; no runtime import or splash-delay behavior was added. Original auth, SecureStore records, guest carts, pending operation IDs, cart synchronization, checkout/history and the live API configuration are preserved.
+
+Website tests/build, 59 existing mobile cases/four files, Android JavaScript export, Expo dependency check and in-memory Android configuration introspection passed. Pixel checks confirmed transparent layers, an opaque app icon, a solid background, matching website/mobile header exports, favicon dimensions and adaptive safe-circle containment. Small icons and circle/squircle previews were inspected. These are automated/asset checks, not a new user-verified authentication/cart/checkout result. The install audit reported 24 findings (8 moderate, 16 high); no forced fixes were performed.
+
+No APK rebuild/install or app-data clearing was performed. Native launcher, themed adaptive icon and splash changes must be included and checked during the planned standalone release build; the current development client cannot establish their appearance. No commit, push or deployment was performed. Earlier manual results and pending live-backend checks remain separate.
+
+Agent-observed logo verification: after reconnecting the installed development client, the approved raster header mark was visibly present beside Beta Drips. App data was preserved. This verifies the JavaScript header only, not the native launcher/splash or pending live authentication/cart/checkout checks. All website brand exports were also present byte-for-byte in the production build.
